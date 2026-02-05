@@ -166,18 +166,19 @@ jobs:
         fi
         sed -i "s/versionCode=.*/versionCode=$VERSION_CODE/" module/module.prop
 
-    - name: Create module zip
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ env.MODULE_NAME }}-${{ env.VERSION }}
+        path: module/
+
+    - name: Create module zip for release
+      if: startsWith(github.ref, 'refs/tags/')
       run: |
         mkdir -p release
         cd module
         zip -r "../release/${{ env.MODULE_NAME }}-${{ env.VERSION }}.zip" . -x "*.git*" -x "*.DS_Store"
         cd ..
-
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: ${{ env.MODULE_NAME }}-${{ env.VERSION }}
-        path: release/*.zip
 
     - name: Create Release
       if: startsWith(github.ref, 'refs/tags/')
