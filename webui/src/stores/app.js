@@ -55,19 +55,16 @@ const ksu = {
   exec: (command, options = {}) => {
     return new Promise((resolve, reject) => {
       const callbackId = `exec_callback_${Date.now()}_${execCallbackId++}`
-      
+
       window[callbackId] = (errno, stdout, stderr) => {
         resolve({ errno, stdout, stderr })
         delete window[callbackId]
       }
-      
+
       try {
-        // 直接使用 ksu.exec，不传 callbackId 给外部
+        // 使用 window.ksu.exec
         if (typeof window.ksu?.exec === 'function') {
           window.ksu.exec(command, JSON.stringify(options || {}), callbackId)
-        } else if (typeof ksu.exec === 'function') {
-          // 如果 ksu 是全局对象
-          ksu.exec(command, JSON.stringify(options || {}), callbackId)
         } else {
           throw new Error('KernelSU exec not available')
         }

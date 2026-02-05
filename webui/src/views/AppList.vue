@@ -308,17 +308,22 @@ onMounted(async () => {
     return
   }
 
-  // 先尝试加载演示数据作为后备
-  appStore.loadDemoData()
-
-  // 然后在后台尝试加载真实数据
+  // API 可用，尝试加载真实数据
+  console.log('KernelSU API available, loading real apps...')
   try {
     const success = await appStore.loadApps('all')
     if (success) {
+      console.log('Real apps loaded successfully')
       await appStore.loadAppConfigs()
+      // 加载成功后，退出演示模式
+      isDemoMode.value = false
+    } else {
+      console.log('Failed to load real apps, loading demo data')
+      appStore.loadDemoData()
     }
   } catch (e) {
-    console.log('Failed to load real apps, keeping demo data')
+    console.error('Failed to load real apps, loading demo data:', e)
+    appStore.loadDemoData()
   }
 })
 </script>
