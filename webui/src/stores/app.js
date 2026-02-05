@@ -532,6 +532,11 @@ export const useAppStore = defineStore('app', () => {
     return `ksu://icon/${pkg}`
   }
 
+  // 直接执行命令
+  const exec = async (command, options = {}) => {
+    return ksu.exec(command, options)
+  }
+
   return {
     apps,
     appConfigs,
@@ -553,6 +558,7 @@ export const useAppStore = defineStore('app', () => {
     getAppLogs,
     clearAppLogs,
     checkDaemon,
-    getAppIconUrl
+    getAppIconUrl,
+    exec
   }
 })

@@ -40,6 +40,55 @@
       </div>
     </div>
 
+    <!-- 监控路径配置 -->
+    <div class="config-card">
+      <div class="section-header">
+        <h3>监控路径</h3>
+        <button class="add-btn" @click="openAddPathModal">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 5v14M5 12h14"/>
+          </svg>
+          添加路径
+        </button>
+      </div>
+      <p class="hint">配置需要监控的文件路径，所有应用访问这些路径时都会被记录</p>
+      
+      <div class="monitor-paths-list">
+        <div v-if="monitorPaths.length === 0" class="empty-state">
+          <div class="empty-icon">📁</div>
+          <p>暂无监控路径</p>
+          <p class="empty-hint">点击上方按钮添加路径</p>
+        </div>
+        
+        <div 
+          v-for="(path, index) in monitorPaths" 
+          :key="path.id"
+          class="path-card"
+          @click="editPath(path)"
+        >
+          <div class="path-header">
+            <span class="path-index">#{{ index + 1 }}</span>
+            <span class="path-text">{{ path.path }}</span>
+            <button 
+              class="delete-btn"
+              @click.stop="confirmDeletePath(path)"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+              </svg>
+            </button>
+          </div>
+          <div v-if="path.desc" class="path-desc">{{ path.desc }}</div>
+          <div class="path-ops">
+            <span class="ops-label">监控操作:</span>
+            <span class="ops-tags">
+              <span v-for="op in path.operations" :key="op" class="op-tag">{{ opLabels[op] || op }}</span>
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="config-card">
       <h3>动态更新</h3>
       
@@ -160,8 +209,101 @@
           <span class="stat-label">上限</span>
         </div>
         <div class="stat-item">
-          <span class="stat-value">{{ logStats.appCount || 0 }}</span>
-          <span class="stat-label">应用数</span>
+          <span class="stat-value">{{ monitorPaths.length }}</span>
+          <span class="stat-label">监控路径</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 查看日志按钮 -->
+    <div class="config-card">
+      <button class="view-logs-btn" @click="showMonitorLogs">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+          <line x1="16" y1="13" x2="8" y2="13"/>
+          <line x1="16" y1="17" x2="8" y2="17"/>
+          <polyline points="10 9 9 9 8 9"/>
+        </svg>
+        查看访问日志
+      </button>
+      <p class="hint" style="text-align: center; margin-top: 12px; margin-bottom: 0;">
+        按路径维度查看所有应用的文件访问记录
+      </p>
+    </div>
+
+    <!-- 添加/编辑路径弹窗 -->
+    <div v-if="showPathModal" class="modal-overlay" @click.self="closePathModal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>{{ editingPath ? '编辑监控路径' : '添加监控路径' }}</h3>
+          <button class="close-btn" @click="closePathModal">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+        
+        <div class="modal-body">
+          <div class="form-group">
+            <label>监控路径</label>
+            <input 
+              v-model="pathForm.path" 
+              type="text" 
+              class="form-input"
+              placeholder="例如: /storage/emulated/0/Pictures"
+            />
+          </div>
+          
+          <div class="form-group">
+            <label>描述（可选）</label>
+            <input 
+              v-model="pathForm.desc" 
+              type="text" 
+              class="form-input"
+              placeholder="例如: 相册目录"
+            />
+          </div>
+          
+          <div class="form-group">
+            <label>监控操作</label>
+            <div class="checkbox-group">
+              <label class="checkbox-label">
+                <input type="checkbox" v-model="pathForm.operations.open">
+                <span>open - 文件打开/创建</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" v-model="pathForm.operations.write">
+                <span>write - 文件写入</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" v-model="pathForm.operations.delete">
+                <span>delete - 文件删除</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" v-model="pathForm.operations.mkdir">
+                <span>mkdir - 创建目录</span>
+              </label>
+            </div>
+          </div>
+        </div>
+        
+        <div class="modal-footer">
+          <button class="btn-secondary" @click="closePathModal">取消</button>
+          <button class="btn-primary" @click="savePath">保存</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 删除确认弹窗 -->
+    <div v-if="showDeleteModal" class="modal-overlay" @click.self="closeDeleteModal">
+      <div class="modal-content confirm-modal">
+        <div class="confirm-icon">⚠️</div>
+        <h3>确认删除</h3>
+        <p>确定要删除这条监控路径吗？</p>
+        <div class="modal-footer">
+          <button class="btn-secondary" @click="closeDeleteModal">取消</button>
+          <button class="btn-danger" @click="deletePath">删除</button>
         </div>
       </div>
     </div>
@@ -170,8 +312,10 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useAppStore } from '../stores/app'
 
+const router = useRouter()
 const appStore = useAppStore()
 
 const config = ref({
@@ -201,6 +345,33 @@ const logStats = ref({
   appCount: 0
 })
 
+// 监控路径数据
+const monitorPaths = ref([])
+
+const opLabels = {
+  'open': '打开',
+  'write': '写入',
+  'delete': '删除',
+  'mkdir': '创建目录'
+}
+
+// 弹窗状态
+const showPathModal = ref(false)
+const showDeleteModal = ref(false)
+const editingPath = ref(null)
+const deletingPath = ref(null)
+
+const pathForm = ref({
+  path: '',
+  desc: '',
+  operations: {
+    open: true,
+    write: true,
+    delete: true,
+    mkdir: false
+  }
+})
+
 const saveConfig = async () => {
   await appStore.saveGlobalConfig(config.value)
 }
@@ -224,12 +395,143 @@ const formatBytes = (bytes) => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 
+// 监控路径相关方法
+const openAddPathModal = () => {
+  editingPath.value = null
+  pathForm.value = {
+    path: '',
+    desc: '',
+    operations: {
+      open: true,
+      write: true,
+      delete: true,
+      mkdir: false
+    }
+  }
+  showPathModal.value = true
+}
+
+const editPath = (path) => {
+  editingPath.value = path
+  pathForm.value = {
+    path: path.path,
+    desc: path.desc || '',
+    operations: {
+      open: path.operations.includes('open'),
+      write: path.operations.includes('write'),
+      delete: path.operations.includes('delete'),
+      mkdir: path.operations.includes('mkdir')
+    }
+  }
+  showPathModal.value = true
+}
+
+const closePathModal = () => {
+  showPathModal.value = false
+  editingPath.value = null
+}
+
+const savePath = () => {
+  if (!pathForm.value.path.trim()) {
+    alert('请输入监控路径')
+    return
+  }
+
+  const operations = []
+  if (pathForm.value.operations.open) operations.push('open')
+  if (pathForm.value.operations.write) operations.push('write')
+  if (pathForm.value.operations.delete) operations.push('delete')
+  if (pathForm.value.operations.mkdir) operations.push('mkdir')
+
+  if (operations.length === 0) {
+    alert('请至少选择一个监控操作')
+    return
+  }
+
+  if (editingPath.value) {
+    // 更新现有路径
+    editingPath.value.path = pathForm.value.path.trim()
+    editingPath.value.desc = pathForm.value.desc.trim()
+    editingPath.value.operations = operations
+  } else {
+    // 添加新路径
+    monitorPaths.value.push({
+      id: Date.now(),
+      path: pathForm.value.path.trim(),
+      desc: pathForm.value.desc.trim(),
+      operations: operations
+    })
+  }
+
+  // 保存到配置
+  saveMonitorPaths()
+  closePathModal()
+}
+
+const confirmDeletePath = (path) => {
+  deletingPath.value = path
+  showDeleteModal.value = true
+}
+
+const closeDeleteModal = () => {
+  showDeleteModal.value = false
+  deletingPath.value = null
+}
+
+const deletePath = () => {
+  if (deletingPath.value) {
+    const index = monitorPaths.value.findIndex(p => p.id === deletingPath.value.id)
+    if (index > -1) {
+      monitorPaths.value.splice(index, 1)
+      saveMonitorPaths()
+    }
+  }
+  closeDeleteModal()
+}
+
+const saveMonitorPaths = async () => {
+  // 将监控路径保存到全局配置
+  const pathsConfig = monitorPaths.value.map(p => ({
+    path: p.path,
+    desc: p.desc,
+    operations: p.operations
+  }))
+  
+  const newConfig = {
+    ...config.value,
+    monitorPaths: pathsConfig
+  }
+  
+  await appStore.saveGlobalConfig(newConfig)
+}
+
+const loadMonitorPaths = async () => {
+  try {
+    const result = await appStore.callDaemon('global get')
+    if (result && result.ok && result.global && result.global.monitorPaths) {
+      monitorPaths.value = result.global.monitorPaths.map((p, index) => ({
+        id: p.id || Date.now() + index,
+        path: p.path,
+        desc: p.desc || '',
+        operations: p.operations || ['open', 'write', 'delete']
+      }))
+    }
+  } catch (e) {
+    console.error('Failed to load monitor paths:', e)
+  }
+}
+
+const showMonitorLogs = () => {
+  router.push('/monitor-logs')
+}
+
 onMounted(async () => {
   await appStore.loadGlobalConfig()
   if (appStore.globalConfig) {
     config.value = { ...config.value, ...appStore.globalConfig }
   }
   await loadStats()
+  await loadMonitorPaths()
 })
 </script>
 
@@ -261,6 +563,43 @@ onMounted(async () => {
   font-weight: 600;
   margin-bottom: 16px;
   color: #1a1a2e;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.section-header h3 {
+  margin-bottom: 0;
+}
+
+.add-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  background: linear-gradient(135deg, #8b5cf6 0%, #a855f7 100%);
+  border: none;
+  border-radius: 12px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+  transition: all 0.3s;
+}
+
+.add-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(139, 92, 246, 0.4);
+}
+
+.add-btn svg {
+  width: 16px;
+  height: 16px;
 }
 
 .form-group {
@@ -379,6 +718,12 @@ input:checked + .slider:before {
   accent-color: #8b5cf6;
 }
 
+.checkbox-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 .stats-card {
   background: linear-gradient(135deg, rgba(139, 92, 246, 0.08) 0%, rgba(139, 92, 246, 0.04) 100%);
   border: 1px solid rgba(139, 92, 246, 0.15);
@@ -406,5 +751,279 @@ input:checked + .slider:before {
 .stat-label {
   font-size: 12px;
   color: #666;
+}
+
+/* 监控路径列表 */
+.monitor-paths-list {
+  margin-top: 16px;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: #9ca3af;
+}
+
+.empty-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.empty-hint {
+  font-size: 13px;
+  margin-top: 8px;
+}
+
+.path-card {
+  background: #f5f6fa;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 12px;
+  cursor: pointer;
+  transition: all 0.3s;
+  border: 1px solid transparent;
+}
+
+.path-card:hover {
+  background: #eef0f5;
+  border-color: rgba(139, 92, 246, 0.2);
+}
+
+.path-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.path-index {
+  color: #8b5cf6;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.path-text {
+  flex: 1;
+  font-weight: 500;
+  color: #1a1a2e;
+  word-break: break-all;
+}
+
+.delete-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(239, 68, 68, 0.1);
+  border: none;
+  color: #ef4444;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s;
+}
+
+.delete-btn:hover {
+  background: rgba(239, 68, 68, 0.2);
+}
+
+.delete-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.path-desc {
+  font-size: 12px;
+  color: #6b7280;
+  margin-bottom: 8px;
+}
+
+.path-ops {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.ops-label {
+  color: #9ca3af;
+}
+
+.ops-tags {
+  display: flex;
+  gap: 6px;
+}
+
+.op-tag {
+  padding: 2px 8px;
+  background: rgba(139, 92, 246, 0.1);
+  color: #8b5cf6;
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+/* 查看日志按钮 */
+.view-logs-btn {
+  width: 100%;
+  padding: 16px;
+  background: linear-gradient(135deg, #8b5cf6 0%, #a855f7 100%);
+  border: none;
+  border-radius: 16px;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(139, 92, 246, 0.3);
+  transition: all 0.3s;
+}
+
+.view-logs-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(139, 92, 246, 0.4);
+}
+
+.view-logs-btn svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* 弹窗样式 */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.modal-content {
+  background: #fff;
+  border-radius: 24px;
+  width: 100%;
+  max-width: 480px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+}
+
+.confirm-modal {
+  text-align: center;
+  padding: 32px;
+}
+
+.confirm-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.confirm-modal h3 {
+  margin-bottom: 8px;
+  color: #1a1a2e;
+}
+
+.confirm-modal p {
+  color: #6b7280;
+  margin-bottom: 24px;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e8e8e8;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+  color: #1a1a2e;
+}
+
+.close-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #f5f6fa;
+  border: none;
+  color: #6b7280;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s;
+}
+
+.close-btn:hover {
+  background: #eef0f5;
+  color: #1a1a2e;
+}
+
+.close-btn svg {
+  width: 20px;
+  height: 20px;
+}
+
+.modal-body {
+  padding: 24px;
+}
+
+.modal-footer {
+  display: flex;
+  gap: 12px;
+  padding: 20px 24px;
+  border-top: 1px solid #e8e8e8;
+}
+
+.modal-footer button {
+  flex: 1;
+  padding: 14px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s;
+  border: none;
+}
+
+.btn-secondary {
+  background: #f5f6fa;
+  color: #6b7280;
+}
+
+.btn-secondary:hover {
+  background: #eef0f5;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #8b5cf6 0%, #a855f7 100%);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(139, 92, 246, 0.4);
+}
+
+.btn-danger {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+.btn-danger:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(239, 68, 68, 0.4);
 }
 </style>

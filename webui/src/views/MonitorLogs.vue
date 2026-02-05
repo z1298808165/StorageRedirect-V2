@@ -1,0 +1,513 @@
+<template>
+  <div class="monitor-logs">
+    <!-- Header -->
+    <header class="header">
+      <button class="back-btn" @click="goBack">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M19 12H5M12 19l-7-7 7-7"/>
+        </svg>
+      </button>
+      <h1>访问日志</h1>
+      <div class="daemon-status">
+        <span class="status-dot"></span>
+        <span>{{ isDemoMode ? '演示模式' : '运行中' }}</span>
+      </div>
+    </header>
+
+    <div class="content">
+      <!-- Filter Bar -->
+      <div class="filter-bar">
+        <div class="search-box">
+          <input 
+            type="text" 
+            class="search-input" 
+            v-model="searchQuery"
+            placeholder="搜索路径、应用包名或文件名..."
+          >
+        </div>
+        <div class="filter-row">
+          <select v-model="pathFilter" class="filter-select">
+            <option value="">所有路径</option>
+            <option v-for="path in monitorPaths" :key="path.id" :value="path.path">
+              {{ path.desc || path.path }}
+            </option>
+          </select>
+          <select v-model="appFilter" class="filter-select">
+            <option value="">所有应用</option>
+            <option v-for="app in uniqueApps" :key="app.pkg" :value="app.pkg">
+              {{ app.name }}
+            </option>
+          </select>
+          <select v-model="actionFilter" class="filter-select">
+            <option value="">所有操作</option>
+            <option value="open">打开</option>
+            <option value="write">写入</option>
+            <option value="delete">删除</option>
+            <option value="mkdir">创建目录</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Logs List -->
+      <div class="logs-list" v-if="filteredLogs.length > 0">
+        <div 
+          v-for="log in filteredLogs" 
+          :key="log.id"
+          class="log-card"
+          :class="log.type"
+        >
+          <div class="log-header">
+            <span class="log-time">{{ log.timestamp }}</span>
+            <span class="log-app">{{ log.appName || log.app }}</span>
+            <span class="log-action" :class="log.action">{{ formatAction(log.action) }}</span>
+            <span class="log-type-badge" :class="log.type">{{ formatType(log.type) }}</span>
+          </div>
+          <div class="log-path">
+            <span class="path-label">路径:</span>
+            <span class="path-value">{{ log.path }}</span>
+          </div>
+          <div class="log-file" v-if="log.file">
+            <span class="file-label">文件:</span>
+            <span class="file-value">{{ log.file }}</span>
+          </div>
+          <div class="log-redirect" v-if="log.redirectTo">
+            <span class="redirect-label">重定向到:</span>
+            <span class="redirect-value">{{ log.redirectTo }}</span>
+          </div>
+          <div class="log-message" v-if="log.message">
+            <span class="message-text">{{ log.message }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Empty State -->
+      <div class="empty-state" v-else>
+        <div class="empty-icon">📋</div>
+        <p>暂无日志记录</p>
+        <p class="hint">开启监控后将记录文件访问操作</p>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { useAppStore } from '../stores/app'
+
+const router = useRouter()
+const appStore = useAppStore()
+
+const isDemoMode = ref(false)
+const logs = ref([])
+const monitorPaths = ref([])
+const searchQuery = ref('')
+const pathFilter = ref('')
+const appFilter = ref('')
+const actionFilter = ref('')
+
+// Demo logs data
+const demoLogs = [
+  { id: 1, timestamp: '2024-01-15 10:23:45', app: 'com.tencent.mm', appName: '微信', path: '/storage/emulated/0/Pictures/WeChat', file: 'IMG_20240115_102345.jpg', action: 'write', type: 'monitor' },
+  { id: 2, timestamp: '2024-01-15 10:23:46', app: 'com.tencent.mm', appName: '微信', path: '/storage/emulated/0/Pictures/WeChat', file: 'IMG_20240115_102346.jpg', action: 'write', type: 'monitor' },
+  { id: 3, timestamp: '2024-01-15 10:24:12', app: 'com.example.demo', appName: '演示应用', path: '/storage/emulated/0/Download', file: 'test.txt', action: 'open', type: 'redirect', redirectTo: '/storage/emulated/0/Download/Demo/test.txt' },
+  { id: 4, timestamp: '2024-01-15 10:24:15', app: 'com.example.demo', appName: '演示应用', path: '/storage/emulated/0/DCIM', file: 'photo.jpg', action: 'write', type: 'deny', message: '只读规则阻止写入' },
+  { id: 5, timestamp: '2024-01-15 10:25:01', app: 'com.taobao.taobao', appName: '淘宝', path: '/storage/emulated/0/Pictures', file: 'screenshot_123.jpg', action: 'write', type: 'monitor' },
+  { id: 6, timestamp: '2024-01-15 10:26:33', app: 'com.sina.weibo', appName: '微博', path: '/storage/emulated/0/Download', file: 'video.mp4', action: 'delete', type: 'monitor' },
+  { id: 7, timestamp: '2024-01-15 10:27:18', app: 'com.baidu.netdisk', appName: '百度网盘', path: '/storage/emulated/0/Download', file: 'document.pdf', action: 'open', type: 'monitor' },
+  { id: 8, timestamp: '2024-01-15 10:28:05', app: 'com.example.demo', appName: '演示应用', path: '/storage/emulated/0/Download', file: 'NewFolder', action: 'mkdir', type: 'redirect', redirectTo: '/storage/emulated/0/Download/Demo/NewFolder' }
+]
+
+// Demo monitor paths
+const demoMonitorPaths = [
+  { id: 1, path: '/storage/emulated/0/Pictures', desc: '相册目录', operations: ['open', 'write', 'delete'] },
+  { id: 2, path: '/storage/emulated/0/Download', desc: '下载目录', operations: ['open', 'write'] }
+]
+
+const uniqueApps = computed(() => {
+  const apps = new Map()
+  logs.value.forEach(log => {
+    if (!apps.has(log.app)) {
+      apps.set(log.app, { pkg: log.app, name: log.appName || log.app })
+    }
+  })
+  return Array.from(apps.values())
+})
+
+const filteredLogs = computed(() => {
+  return logs.value.filter(log => {
+    // Search query filter
+    if (searchQuery.value) {
+      const query = searchQuery.value.toLowerCase()
+      const matchSearch = 
+        log.path.toLowerCase().includes(query) ||
+        log.app.toLowerCase().includes(query) ||
+        (log.file && log.file.toLowerCase().includes(query)) ||
+        (log.appName && log.appName.toLowerCase().includes(query))
+      if (!matchSearch) return false
+    }
+    
+    // Path filter
+    if (pathFilter.value && !log.path.startsWith(pathFilter.value)) {
+      return false
+    }
+    
+    // App filter
+    if (appFilter.value && log.app !== appFilter.value) {
+      return false
+    }
+    
+    // Action filter
+    if (actionFilter.value && log.action !== actionFilter.value) {
+      return false
+    }
+    
+    return true
+  })
+})
+
+const goBack = () => {
+  router.back()
+}
+
+const formatAction = (action) => {
+  const map = {
+    'open': '打开',
+    'write': '写入',
+    'delete': '删除',
+    'mkdir': '创建目录',
+    'read': '读取'
+  }
+  return map[action] || action
+}
+
+const formatType = (type) => {
+  const map = {
+    'monitor': '监控',
+    'redirect': '重定向',
+    'deny': '阻止'
+  }
+  return map[type] || type
+}
+
+const loadLogs = async () => {
+  try {
+    // Try to load real logs from store
+    const result = await appStore.exec('cat /data/local/tmp/storage_redirect/logs/monitor.log 2>/dev/null || echo "[]"')
+    if (result && result.stdout) {
+      try {
+        const parsed = JSON.parse(result.stdout)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          logs.value = parsed
+          isDemoMode.value = false
+          return
+        }
+      } catch (e) {
+        // Parse error, use demo data
+      }
+    }
+  } catch (e) {
+    // Error loading, use demo data
+  }
+  
+  // Use demo data
+  logs.value = demoLogs
+  isDemoMode.value = true
+}
+
+const loadMonitorPaths = async () => {
+  try {
+    const result = await appStore.exec('cat /data/local/tmp/storage_redirect/config/monitor_paths.json 2>/dev/null || echo "[]"')
+    if (result && result.stdout) {
+      try {
+        const parsed = JSON.parse(result.stdout)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          monitorPaths.value = parsed
+          return
+        }
+      } catch (e) {
+        // Parse error
+      }
+    }
+  } catch (e) {
+    // Error loading
+  }
+  
+  // Use demo data
+  monitorPaths.value = demoMonitorPaths
+}
+
+onMounted(async () => {
+  await loadLogs()
+  await loadMonitorPaths()
+})
+</script>
+
+<style scoped>
+.monitor-logs {
+  min-height: 100vh;
+  background: linear-gradient(180deg, #f8f9fc 0%, #f0f2f8 100%);
+  color: #1a1a2e;
+  padding-bottom: 20px;
+}
+
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(20px);
+  padding: 16px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.header h1 {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1a1a2e;
+}
+
+.back-btn {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f5f6fa;
+  border: none;
+  border-radius: 50%;
+  color: #1a1a2e;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.back-btn:hover {
+  background: #eef0f5;
+}
+
+.back-btn svg {
+  width: 20px;
+  height: 20px;
+}
+
+.daemon-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.1);
+  padding: 6px 12px;
+  border-radius: 20px;
+}
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #10b981;
+}
+
+.content {
+  padding: 16px;
+}
+
+.filter-bar {
+  background: #fff;
+  padding: 16px;
+  border-radius: 20px;
+  margin-bottom: 16px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+}
+
+.search-box {
+  margin-bottom: 12px;
+}
+
+.search-input {
+  width: 100%;
+  padding: 14px 16px;
+  background: #f5f6fa;
+  border: none;
+  border-radius: 16px;
+  color: #1a1a2e;
+  font-size: 15px;
+  outline: none;
+  transition: all 0.3s;
+}
+
+.search-input:focus {
+  background: #eef0f5;
+  box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.2);
+}
+
+.search-input::placeholder {
+  color: #9ca3af;
+}
+
+.filter-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.filter-select {
+  flex: 1;
+  min-width: 100px;
+  padding: 12px;
+  background: #f5f6fa;
+  border: none;
+  border-radius: 12px;
+  color: #1a1a2e;
+  font-size: 14px;
+  outline: none;
+  cursor: pointer;
+}
+
+.logs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.log-card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  border-left: 4px solid #8b5cf6;
+}
+
+.log-card.monitor {
+  border-left-color: #10b981;
+}
+
+.log-card.redirect {
+  border-left-color: #8b5cf6;
+}
+
+.log-card.deny {
+  border-left-color: #ef4444;
+}
+
+.log-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.log-time {
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.log-app {
+  font-size: 13px;
+  font-weight: 500;
+  color: #1a1a2e;
+}
+
+.log-action {
+  font-size: 11px;
+  padding: 2px 8px;
+  background: #f5f6fa;
+  border-radius: 4px;
+  color: #6b7280;
+}
+
+.log-action.write {
+  background: rgba(139, 92, 246, 0.1);
+  color: #8b5cf6;
+}
+
+.log-action.delete {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+
+.log-action.mkdir {
+  background: rgba(16, 185, 129, 0.1);
+  color: #10b981;
+}
+
+.log-type-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.log-type-badge.monitor {
+  background: rgba(16, 185, 129, 0.1);
+  color: #10b981;
+}
+
+.log-type-badge.redirect {
+  background: rgba(139, 92, 246, 0.1);
+  color: #8b5cf6;
+}
+
+.log-type-badge.deny {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+
+.log-path, .log-file, .log-redirect {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 4px;
+  font-size: 13px;
+}
+
+.path-label, .file-label, .redirect-label {
+  color: #9ca3af;
+  flex-shrink: 0;
+}
+
+.path-value, .file-value {
+  color: #1a1a2e;
+  word-break: break-all;
+}
+
+.redirect-value {
+  color: #8b5cf6;
+  word-break: break-all;
+}
+
+.log-message {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: rgba(239, 68, 68, 0.05);
+  border-radius: 8px;
+}
+
+.message-text {
+  font-size: 12px;
+  color: #ef4444;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: #9ca3af;
+}
+
+.empty-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.empty-state p {
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.empty-state .hint {
+  font-size: 13px;
+  color: #6b7280;
+}
+</style>
