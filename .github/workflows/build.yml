@@ -68,6 +68,13 @@ jobs:
 
     - name: Build WebUI
       run: |
+        echo "Current directory: $(pwd)"
+        echo "Listing all files:"
+        ls -la
+        echo ""
+        echo "Checking if webui exists:"
+        ls -la webui/ 2>/dev/null || echo "webui directory not found!"
+        echo ""
         cd webui
         npm install
         npm run build
