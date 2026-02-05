@@ -47,35 +47,43 @@ const demoLogs = [
 ]
 
 // KernelSU API 封装
-const ksu = {
+// ksu 是 KernelSU 自动注入的全局对象
+const ksu = window.ksu || {
   // 执行命令
-  exec: async (command) => {
-    if (typeof window.exec === 'function') {
-      return window.exec(command)
-    }
-    throw new Error('KernelSU exec not available')
+  exec: async (command, options = {}, callbackId) => {
+    return new Promise((resolve, reject) => {
+      if (typeof window.exec === 'function') {
+        window[callbackId] = (errno, stdout, stderr) => {
+          resolve({ errno, stdout, stderr })
+          delete window[callbackId]
+        }
+        window.exec(command, JSON.stringify(options), callbackId)
+      } else {
+        reject(new Error('KernelSU exec not available'))
+      }
+    })
   },
-  
+
   // 获取应用列表
-  listPackages: async (type = 'all') => {
-    if (typeof window.listPackages === 'function') {
-      return window.listPackages(type)
+  listPackages: (type = 'all') => {
+    if (typeof window.ksu?.listPackages === 'function') {
+      return window.ksu.listPackages(type)
     }
     throw new Error('KernelSU listPackages not available')
   },
-  
+
   // 获取应用信息
-  getPackagesInfo: async (packages) => {
-    if (typeof window.getPackagesInfo === 'function') {
-      return window.getPackagesInfo(packages)
+  getPackagesInfo: (packages) => {
+    if (typeof window.ksu?.getPackagesInfo === 'function') {
+      return window.ksu.getPackagesInfo(JSON.stringify(packages))
     }
     throw new Error('KernelSU getPackagesInfo not available')
   },
-  
+
   // 显示 Toast
   toast: (message) => {
-    if (typeof window.toast === 'function') {
-      window.toast(message)
+    if (typeof window.ksu?.toast === 'function') {
+      window.ksu.toast(message)
     } else {
       console.log('[Toast]', message)
     }
@@ -161,7 +169,8 @@ export const useAppStore = defineStore('app', () => {
     }
 
     try {
-      const { errno, stdout, stderr } = await ksu.exec(command)
+      const callbackId = `exec_cb_${Date.now()}_${Math.random()}`
+      const { errno, stdout, stderr } = await ksu.exec(command, {}, callbackId)
       if (errno === 0) {
         const result = JSON.parse(stdout)
         // 转换 daemonctl 的输出格式为前端期望的格式
@@ -247,10 +256,16 @@ export const useAppStore = defineStore('app', () => {
   const loadApps = async (type = 'all') => {
     loading.value = true
     loadError.value = null
-    
+
     try {
-      const packages = await ksu.listPackages(type)
-      const info = await ksu.getPackagesInfo(packages)
+      // listPackages 返回 JSON 字符串数组
+      const packagesJson = ksu.listPackages(type)
+      const packageNames = JSON.parse(packagesJson)
+
+      // getPackagesInfo 需要传入 JSON 字符串数组
+      const infoJson = ksu.getPackagesInfo(packageNames)
+      const info = JSON.parse(infoJson)
+
       apps.value = info.map(p => ({
         packageName: p.packageName,
         appLabel: p.appLabel,
