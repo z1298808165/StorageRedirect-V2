@@ -14,9 +14,6 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./StorageRedirect-V2
     
     steps:
     - name: Checkout
@@ -148,13 +145,13 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: ${{ env.MODULE_NAME }}-${{ env.VERSION }}
-        path: StorageRedirect-V2/release/*.zip
+        path: release/*.zip
 
     - name: Create Release
       if: startsWith(github.ref, 'refs/tags/')
       uses: softprops/action-gh-release@v1
       with:
-        files: StorageRedirect-V2/release/*.zip
+        files: release/*.zip
         generate_release_notes: true
         draft: false
         prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
