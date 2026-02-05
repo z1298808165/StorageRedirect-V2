@@ -16,15 +16,3 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
     log
     dl
 )
-
-# 添加 daemon 可执行文件
-add_executable(sr-daemon
-    daemon_main.cpp
-    config.cpp
-    ipc.cpp
-    utils.cpp
-)
-
-target_link_libraries(sr-daemon
-    log
-)
