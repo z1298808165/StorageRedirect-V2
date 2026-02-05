@@ -24,8 +24,15 @@ const initKsuApi = async () => {
     const keys = Object.keys(ksuModule)
     console.log('[store] ksuModule keys:', keys)
 
-    // 检查模块导出方式
-    if (ksuModule.default) {
+    // KernelSU API 使用命名导出
+    // 优先使用命名导出，如果没有则尝试默认导出
+    if (ksuModule.listPackages) {
+      console.log('[store] Using named exports')
+      ksuApis.listPackages = ksuModule.listPackages
+      ksuApis.getPackagesInfo = ksuModule.getPackagesInfo
+      ksuApis.exec = ksuModule.exec
+      ksuApis.toast = ksuModule.toast
+    } else if (ksuModule.default) {
       console.log('[store] Using default export')
       const defaultExport = ksuModule.default
       ksuApis.listPackages = defaultExport.listPackages
@@ -33,17 +40,20 @@ const initKsuApi = async () => {
       ksuApis.exec = defaultExport.exec
       ksuApis.toast = defaultExport.toast
     } else {
-      console.log('[store] Using named exports')
-      ksuApis.listPackages = ksuModule.listPackages
-      ksuApis.getPackagesInfo = ksuModule.getPackagesInfo
-      ksuApis.exec = ksuModule.exec
-      ksuApis.toast = ksuModule.toast
+      console.error('[store] No valid exports found in kernelsu module')
+      return false
     }
 
     console.log('[store] listPackages:', typeof ksuApis.listPackages)
     console.log('[store] getPackagesInfo:', typeof ksuApis.getPackagesInfo)
     console.log('[store] exec:', typeof ksuApis.exec)
     console.log('[store] toast:', typeof ksuApis.toast)
+
+    // 检查关键 API 是否可用
+    if (!ksuApis.listPackages || !ksuApis.getPackagesInfo) {
+      console.error('[store] Required APIs not available')
+      return false
+    }
 
     ksuModuleLoaded = true
     console.log('[store] kernelsu module loaded successfully')
@@ -107,12 +117,18 @@ const ksuApi = {
   init: initKsuApi,
 
   // 检查 API 是否可用
-  isAvailable: () => ksuModuleLoaded && ksuApis.listPackages !== null && ksuApis.getPackagesInfo !== null,
+  isAvailable: () => {
+    const available = ksuModuleLoaded && ksuApis.listPackages !== null && ksuApis.getPackagesInfo !== null
+    console.log('[ksuApi] isAvailable check:', { ksuModuleLoaded, listPackages: typeof ksuApis.listPackages, getPackagesInfo: typeof ksuApis.getPackagesInfo, available })
+    return available
+  },
 
   // 执行命令 - 使用导入的 exec 函数
   exec: async (command, options = {}) => {
     if (!ksuApis.exec) {
-      throw new Error('exec API not available')
+      console.warn('[ksuApi] exec API not available, command will not be executed:', command)
+      // 返回模拟的失败结果，而不是抛出错误
+      return { errno: -1, stdout: '', stderr: 'exec API not available' }
     }
     try {
       console.log('[ksuApi] exec called:', command)
