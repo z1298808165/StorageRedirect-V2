@@ -21,6 +21,18 @@ jobs:
       with:
         fetch-depth: 0
 
+    - name: Debug directory structure
+      run: |
+        echo "Current directory: $(pwd)"
+        echo "Directory contents:"
+        ls -la
+        echo ""
+        echo "Looking for webui directory:"
+        find . -type d -name "webui" 2>/dev/null || echo "No webui directory found"
+        echo ""
+        echo "Looking for package.json:"
+        find . -name "package.json" -type f 2>/dev/null || echo "No package.json found"
+
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
