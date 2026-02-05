@@ -260,12 +260,19 @@ onMounted(async () => {
   const apiAvailable = await waitForKsuApi()
   
   if (!apiAvailable) {
-    console.log('KernelSU API not available, will show error state')
+    console.log('KernelSU API not available, auto loading demo data')
+    // API 不可用，自动加载演示数据
+    appStore.loadDemoData()
+    return
   }
   
   const success = await appStore.loadApps('all')
   if (success) {
     await appStore.loadAppConfigs()
+  } else {
+    // 加载失败，自动切换到演示模式
+    console.log('Failed to load apps, switching to demo mode')
+    appStore.loadDemoData()
   }
 })
 </script>
