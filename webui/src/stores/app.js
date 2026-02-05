@@ -81,12 +81,19 @@ const ksuApi = {
   listPackages: (type = 'all') => {
     try {
       // 直接使用全局 ksu 对象
+      console.log('[ksuApi] listPackages called with type:', type)
+      console.log('[ksuApi] typeof ksu:', typeof ksu)
+      console.log('[ksuApi] typeof ksu?.listPackages:', typeof ksu?.listPackages)
+      
       if (typeof ksu?.listPackages === 'function') {
-        return ksu.listPackages(type)
+        const result = ksu.listPackages(type)
+        console.log('[ksuApi] listPackages raw result:', result)
+        console.log('[ksuApi] listPackages result type:', typeof result)
+        return result
       }
       throw new Error('KernelSU listPackages not available')
     } catch (e) {
-      console.error('listPackages error:', e)
+      console.error('[ksuApi] listPackages error:', e)
       throw e
     }
   },
@@ -306,12 +313,22 @@ export const useAppStore = defineStore('app', () => {
           console.log('[store] Calling ksuApi.listPackages("user")...')
           const userPackagesJson = ksuApi.listPackages('user')
           console.log('[store] Raw user packages result:', userPackagesJson)
-          if (userPackagesJson) {
-            const userPackages = JSON.parse(userPackagesJson)
-            console.log('[store] Parsed user packages:', userPackages)
-            if (userPackages && userPackages.length > 0) {
-              allPackages = allPackages.concat(userPackages)
+          console.log('[store] userPackagesJson type:', typeof userPackagesJson)
+          
+          if (userPackagesJson && typeof userPackagesJson === 'string') {
+            try {
+              const userPackages = JSON.parse(userPackagesJson)
+              console.log('[store] Parsed user packages:', userPackages)
+              console.log('[store] userPackages is array:', Array.isArray(userPackages))
+              
+              if (Array.isArray(userPackages) && userPackages.length > 0) {
+                allPackages = allPackages.concat(userPackages)
+              }
+            } catch (parseError) {
+              console.error('[store] Failed to parse user packages JSON:', parseError)
             }
+          } else {
+            console.warn('[store] userPackagesJson is empty or not a string:', userPackagesJson)
           }
         } catch (e) {
           console.error('[store] Failed to load user packages:', e)
@@ -324,12 +341,22 @@ export const useAppStore = defineStore('app', () => {
           console.log('[store] Calling ksuApi.listPackages("system")...')
           const systemPackagesJson = ksuApi.listPackages('system')
           console.log('[store] Raw system packages result:', systemPackagesJson)
-          if (systemPackagesJson) {
-            const systemPackages = JSON.parse(systemPackagesJson)
-            console.log('[store] Parsed system packages:', systemPackages)
-            if (systemPackages && systemPackages.length > 0) {
-              allPackages = allPackages.concat(systemPackages)
+          console.log('[store] systemPackagesJson type:', typeof systemPackagesJson)
+          
+          if (systemPackagesJson && typeof systemPackagesJson === 'string') {
+            try {
+              const systemPackages = JSON.parse(systemPackagesJson)
+              console.log('[store] Parsed system packages:', systemPackages)
+              console.log('[store] systemPackages is array:', Array.isArray(systemPackages))
+              
+              if (Array.isArray(systemPackages) && systemPackages.length > 0) {
+                allPackages = allPackages.concat(systemPackages)
+              }
+            } catch (parseError) {
+              console.error('[store] Failed to parse system packages JSON:', parseError)
             }
+          } else {
+            console.warn('[store] systemPackagesJson is empty or not a string:', systemPackagesJson)
           }
         } catch (e) {
           console.error('[store] Failed to load system packages:', e)
