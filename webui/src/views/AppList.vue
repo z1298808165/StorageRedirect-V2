@@ -161,35 +161,36 @@ const tabs = [
   { label: '已配置', value: 'configured' }
 ]
 
-const { apps, loading, loadError, isDemoMode, appsWithRules, appsWithoutRules } = appStore
+const { apps, loading, loadError, isDemoMode } = appStore
 
 const filteredApps = computed(() => {
-  let apps = []
+  let result = []
 
   if (currentTab.value === 'configured') {
-    apps = appsWithRules
+    result = appStore.appsWithRules
   } else {
-    apps = [...appsWithRules, ...appsWithoutRules]
+    result = [...appStore.appsWithRules, ...appStore.appsWithoutRules]
 
     if (currentTab.value === 'user') {
-      apps = apps.filter(a => !a.isSystem)
+      result = result.filter(a => !a.isSystem)
     } else if (currentTab.value === 'system') {
-      apps = apps.filter(a => a.isSystem)
+      result = result.filter(a => a.isSystem)
     }
   }
 
   if (searchQuery.value) {
     const query = searchQuery.value.toLowerCase()
-    apps = apps.filter(app =>
+    result = result.filter(app =>
       app.appLabel.toLowerCase().includes(query) ||
       app.packageName.toLowerCase().includes(query)
     )
   }
 
-  return apps
+  return result
 })
 
 const filteredAppsWithRules = computed(() => {
+  // 从已过滤的应用列表中筛选出有规则的应用
   return filteredApps.value.filter(app => {
     const config = appStore.appConfigs[app.packageName]
     return config && (config.enabled ||
@@ -200,6 +201,7 @@ const filteredAppsWithRules = computed(() => {
 
 const filteredAppsWithoutRules = computed(() => {
   if (currentTab.value === 'configured') return []
+  // 从已过滤的应用列表中筛选出无规则的应用
   return filteredApps.value.filter(app => {
     const config = appStore.appConfigs[app.packageName]
     return !config || (!config.enabled &&
