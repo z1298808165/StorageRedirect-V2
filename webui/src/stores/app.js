@@ -151,6 +151,16 @@ const ksuApi = {
       const result = ksuApis.listPackages(type)
       console.log('[ksuApi] listPackages result:', result)
       console.log('[ksuApi] listPackages is array:', Array.isArray(result))
+      
+      // 确保返回数组
+      if (!result) {
+        console.warn('[ksuApi] listPackages returned null/undefined, returning empty array')
+        return []
+      }
+      if (!Array.isArray(result)) {
+        console.warn('[ksuApi] listPackages returned non-array:', typeof result, '- returning empty array')
+        return []
+      }
       return result
     } catch (e) {
       console.error('[ksuApi] listPackages error:', e)
@@ -178,6 +188,16 @@ const ksuApi = {
       const result = ksuApis.getPackagesInfo(packages)
       console.log('[ksuApi] getPackagesInfo result:', result)
       console.log('[ksuApi] getPackagesInfo is array:', Array.isArray(result))
+      
+      // 确保返回数组
+      if (!result) {
+        console.warn('[ksuApi] getPackagesInfo returned null/undefined, returning empty array')
+        return []
+      }
+      if (!Array.isArray(result)) {
+        console.warn('[ksuApi] getPackagesInfo returned non-array:', typeof result, '- returning empty array')
+        return []
+      }
       return result
     } catch (e) {
       console.error('[ksuApi] getPackagesInfo error:', e)
@@ -446,15 +466,18 @@ export const useAppStore = defineStore('app', () => {
         throw new Error('获取应用信息返回的不是数组')
       }
 
-      apps.value = info.map(p => ({
-        packageName: p.packageName,
-        appLabel: p.appLabel,
-        versionName: p.versionName,
-        versionCode: p.versionCode,
-        isSystem: p.isSystem,
-        uid: p.uid,
-        userId: p.userId || 0
-      }))
+      // 过滤掉无效的应用数据
+      apps.value = info
+        .filter(p => p && typeof p === 'object' && p.packageName)
+        .map(p => ({
+          packageName: p.packageName,
+          appLabel: p.appLabel || p.packageName,
+          versionName: p.versionName || '',
+          versionCode: p.versionCode || 0,
+          isSystem: p.isSystem || false,
+          uid: p.uid || 0,
+          userId: p.userId || 0
+        }))
 
       console.log('[store] Loaded apps:', apps.value.length)
       return true
