@@ -77,18 +77,20 @@ const ksuApi = {
     })
   },
 
-  // 获取应用列表 - 同步调用，返回 JSON 字符串
+  // 获取应用列表 - 同步调用，直接返回数组（不是 JSON 字符串！）
   listPackages: (type = 'all') => {
     try {
       // 直接使用全局 ksu 对象
       console.log('[ksuApi] listPackages called with type:', type)
       console.log('[ksuApi] typeof ksu:', typeof ksu)
       console.log('[ksuApi] typeof ksu?.listPackages:', typeof ksu?.listPackages)
-      
+
       if (typeof ksu?.listPackages === 'function') {
         const result = ksu.listPackages(type)
         console.log('[ksuApi] listPackages raw result:', result)
         console.log('[ksuApi] listPackages result type:', typeof result)
+        console.log('[ksuApi] listPackages is array:', Array.isArray(result))
+        // 官方 API 直接返回数组，不是 JSON 字符串
         return result
       }
       throw new Error('KernelSU listPackages not available')
@@ -98,16 +100,23 @@ const ksuApi = {
     }
   },
 
-  // 获取应用信息 - 同步调用，返回 JSON 字符串
+  // 获取应用信息 - 同步调用，直接返回数组（不是 JSON 字符串！）
   getPackagesInfo: (packages) => {
     try {
       // 直接使用全局 ksu 对象
+      console.log('[ksuApi] getPackagesInfo called with packages count:', packages.length)
+
       if (typeof ksu?.getPackagesInfo === 'function') {
-        return ksu.getPackagesInfo(JSON.stringify(packages))
+        // 官方 API 直接传入数组，返回的也是数组，不是 JSON 字符串
+        const result = ksu.getPackagesInfo(packages)
+        console.log('[ksuApi] getPackagesInfo raw result:', result)
+        console.log('[ksuApi] getPackagesInfo result type:', typeof result)
+        console.log('[ksuApi] getPackagesInfo is array:', Array.isArray(result))
+        return result
       }
       throw new Error('KernelSU getPackagesInfo not available')
     } catch (e) {
-      console.error('getPackagesInfo error:', e)
+      console.error('[ksuApi] getPackagesInfo error:', e)
       throw e
     }
   },
@@ -307,28 +316,17 @@ export const useAppStore = defineStore('app', () => {
       let allPackages = []
 
       // 根据类型获取应用包名列表 - 参考示例代码实现
+      // 注意：官方 API 直接返回数组，不是 JSON 字符串！
       if (type === 'all' || type === 'user') {
         // 获取用户应用
         try {
           console.log('[store] Calling ksuApi.listPackages("user")...')
-          const userPackagesJson = ksuApi.listPackages('user')
-          console.log('[store] Raw user packages result:', userPackagesJson)
-          console.log('[store] userPackagesJson type:', typeof userPackagesJson)
-          
-          if (userPackagesJson && typeof userPackagesJson === 'string') {
-            try {
-              const userPackages = JSON.parse(userPackagesJson)
-              console.log('[store] Parsed user packages:', userPackages)
-              console.log('[store] userPackages is array:', Array.isArray(userPackages))
-              
-              if (Array.isArray(userPackages) && userPackages.length > 0) {
-                allPackages = allPackages.concat(userPackages)
-              }
-            } catch (parseError) {
-              console.error('[store] Failed to parse user packages JSON:', parseError)
-            }
-          } else {
-            console.warn('[store] userPackagesJson is empty or not a string:', userPackagesJson)
+          const userPackages = ksuApi.listPackages('user')
+          console.log('[store] User packages result:', userPackages)
+          console.log('[store] User packages is array:', Array.isArray(userPackages))
+
+          if (Array.isArray(userPackages) && userPackages.length > 0) {
+            allPackages = allPackages.concat(userPackages)
           }
         } catch (e) {
           console.error('[store] Failed to load user packages:', e)
@@ -339,24 +337,12 @@ export const useAppStore = defineStore('app', () => {
         // 获取系统应用
         try {
           console.log('[store] Calling ksuApi.listPackages("system")...')
-          const systemPackagesJson = ksuApi.listPackages('system')
-          console.log('[store] Raw system packages result:', systemPackagesJson)
-          console.log('[store] systemPackagesJson type:', typeof systemPackagesJson)
-          
-          if (systemPackagesJson && typeof systemPackagesJson === 'string') {
-            try {
-              const systemPackages = JSON.parse(systemPackagesJson)
-              console.log('[store] Parsed system packages:', systemPackages)
-              console.log('[store] systemPackages is array:', Array.isArray(systemPackages))
-              
-              if (Array.isArray(systemPackages) && systemPackages.length > 0) {
-                allPackages = allPackages.concat(systemPackages)
-              }
-            } catch (parseError) {
-              console.error('[store] Failed to parse system packages JSON:', parseError)
-            }
-          } else {
-            console.warn('[store] systemPackagesJson is empty or not a string:', systemPackagesJson)
+          const systemPackages = ksuApi.listPackages('system')
+          console.log('[store] System packages result:', systemPackages)
+          console.log('[store] System packages is array:', Array.isArray(systemPackages))
+
+          if (Array.isArray(systemPackages) && systemPackages.length > 0) {
+            allPackages = allPackages.concat(systemPackages)
           }
         } catch (e) {
           console.error('[store] Failed to load system packages:', e)
@@ -371,17 +357,17 @@ export const useAppStore = defineStore('app', () => {
         throw new Error('获取应用列表为空')
       }
 
-      // getPackagesInfo 需要传入数组，返回 JSON 字符串
+      // getPackagesInfo 直接传入数组，返回的也是数组（不是 JSON 字符串！）
       console.log('[store] Calling ksuApi.getPackagesInfo...')
-      const infoJson = ksuApi.getPackagesInfo(allPackages)
-      console.log('[store] Raw info result:', infoJson)
+      const info = ksuApi.getPackagesInfo(allPackages)
+      console.log('[store] Info result:', info)
+      console.log('[store] Info is array:', Array.isArray(info))
 
-      if (!infoJson) {
-        throw new Error('获取应用信息返回空')
+      if (!Array.isArray(info)) {
+        throw new Error('获取应用信息返回的不是数组')
       }
 
-      const info = JSON.parse(infoJson)
-      console.log('[store] Parsed info count:', info.length)
+      console.log('[store] Info count:', info.length)
 
       apps.value = info.map(p => ({
         packageName: p.packageName,
