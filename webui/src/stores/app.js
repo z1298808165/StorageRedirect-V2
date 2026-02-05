@@ -16,7 +16,29 @@ const initKsuApi = async () => {
 
   try {
     console.log('[store] Trying to import kernelsu module...')
-    const ksuModule = await import('kernelsu')
+    console.log('[store] window.kernelsu:', typeof window.kernelsu)
+    
+    let ksuModule = null
+    
+    // 方法1: 尝试从 window.kernelsu 获取（KernelSU 直接注入）
+    if (window.kernelsu) {
+      console.log('[store] Found window.kernelsu')
+      ksuModule = window.kernelsu
+    } else {
+      // 方法2: 尝试动态导入
+      try {
+        ksuModule = await import('kernelsu')
+        console.log('[store] Imported kernelsu module:', ksuModule)
+      } catch (importErr) {
+        console.error('[store] Failed to import kernelsu:', importErr)
+      }
+    }
+    
+    if (!ksuModule) {
+      console.error('[store] kernelsu module not found')
+      return false
+    }
+    
     console.log('[store] ksuModule:', ksuModule)
     console.log('[store] typeof ksuModule:', typeof ksuModule)
 
