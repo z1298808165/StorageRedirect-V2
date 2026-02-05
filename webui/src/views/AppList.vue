@@ -164,7 +164,10 @@ const tabs = [
   { label: '已配置', value: 'configured' }
 ]
 
-const { apps, loading, loadError, isDemoMode } = appStore
+// 注意：不要解构 ref，直接使用 appStore.xxx 保持响应性
+const loading = appStore.loading
+const loadError = appStore.loadError
+const isDemoMode = appStore.isDemoMode
 
 const filteredApps = computed(() => {
   let result = []
@@ -301,10 +304,10 @@ const waitForKsuApi = async (maxRetries = 20, interval = 500) => {
 
 onMounted(async () => {
   console.log('[AppList] Component mounted')
-  console.log('[AppList] Initial apps count:', apps.value.length)
+  console.log('[AppList] Initial apps count:', appStore.apps.value.length)
 
   // 如果已经加载过数据，直接返回
-  if (apps.value.length > 0) {
+  if (appStore.apps.value.length > 0) {
     console.log('[AppList] Apps already loaded, skipping')
     return
   }
