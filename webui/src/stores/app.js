@@ -104,7 +104,16 @@ const ksuApi = {
   getPackagesInfo: (packages) => {
     try {
       // 直接使用全局 ksu 对象
-      console.log('[ksuApi] getPackagesInfo called with packages count:', packages.length)
+      console.log('[ksuApi] getPackagesInfo called')
+      console.log('[ksuApi] packages param:', packages)
+      console.log('[ksuApi] packages is array:', Array.isArray(packages))
+
+      if (!Array.isArray(packages)) {
+        console.error('[ksuApi] packages is not an array!')
+        return []
+      }
+
+      console.log('[ksuApi] packages count:', packages.length)
 
       if (typeof ksu?.getPackagesInfo === 'function') {
         // 官方 API 直接传入数组，返回的也是数组，不是 JSON 字符串
@@ -349,7 +358,11 @@ export const useAppStore = defineStore('app', () => {
         }
       }
 
-      // 去重
+      // 去重 - 确保 allPackages 是数组
+      if (!Array.isArray(allPackages)) {
+        console.error('[store] allPackages is not an array:', allPackages)
+        allPackages = []
+      }
       allPackages = [...new Set(allPackages)]
       console.log('[store] Total unique packages:', allPackages.length)
 
@@ -368,6 +381,12 @@ export const useAppStore = defineStore('app', () => {
       }
 
       console.log('[store] Info count:', info.length)
+
+      // 确保 info 是数组
+      if (!Array.isArray(info)) {
+        console.error('[store] info is not an array:', info)
+        throw new Error('获取应用信息返回的不是数组')
+      }
 
       apps.value = info.map(p => ({
         packageName: p.packageName,
