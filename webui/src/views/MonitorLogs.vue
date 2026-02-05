@@ -227,16 +227,25 @@ const executeClear = async () => {
     const result = await appStore.callDaemon('log clear', { pkg: '' })
     if (result && result.ok) {
       logs.value = []
-      ksu.toast('日志已清空')
+      // 使用全局 ksu 对象
+      if (typeof ksu?.toast === 'function') {
+        ksu.toast('日志已清空')
+      }
     } else {
       // 尝试直接清空日志文件
       await appStore.exec('rm -f /data/adb/modules/StorageRedirect/logs/*.log')
       logs.value = []
-      ksu.toast('日志已清空')
+      // 使用全局 ksu 对象
+      if (typeof ksu?.toast === 'function') {
+        ksu.toast('日志已清空')
+      }
     }
   } catch (e) {
     console.error('Failed to clear logs:', e)
-    ksu.toast('清空日志失败')
+    // 使用全局 ksu 对象
+    if (typeof ksu?.toast === 'function') {
+      ksu.toast('清空日志失败')
+    }
   }
   closeClearModal()
 }

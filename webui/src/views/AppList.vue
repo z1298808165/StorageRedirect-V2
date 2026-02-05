@@ -278,7 +278,8 @@ const waitForKsuApi = (maxRetries = 10, interval = 500) => {
     const check = () => {
       retries++
       console.log(`Checking ksu API (attempt ${retries}/${maxRetries})...`)
-      if (typeof window.ksu?.listPackages === 'function') {
+      // 使用全局 ksu 对象
+      if (typeof ksu?.listPackages === 'function') {
         console.log('ksu API is available!')
         resolve(true)
       } else if (retries >= maxRetries) {

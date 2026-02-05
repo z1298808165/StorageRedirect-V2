@@ -48,9 +48,11 @@ const demoLogs = [
 ]
 
 // KernelSU API 封装 - 参考示例实现
+// ksu 是 KernelSU 自动注入的全局对象，直接使用 ksu.xxx()
+
 let execCallbackId = 0
 
-const ksu = {
+const ksuApi = {
   // 执行命令 - 使用回调机制
   exec: (command, options = {}) => {
     return new Promise((resolve, reject) => {
@@ -62,9 +64,9 @@ const ksu = {
       }
 
       try {
-        // 使用 window.ksu.exec
-        if (typeof window.ksu?.exec === 'function') {
-          window.ksu.exec(command, JSON.stringify(options || {}), callbackId)
+        // 直接使用全局 ksu 对象
+        if (typeof ksu?.exec === 'function') {
+          ksu.exec(command, JSON.stringify(options || {}), callbackId)
         } else {
           throw new Error('KernelSU exec not available')
         }
@@ -78,8 +80,9 @@ const ksu = {
   // 获取应用列表 - 同步调用，返回 JSON 字符串
   listPackages: (type = 'all') => {
     try {
-      if (typeof window.ksu?.listPackages === 'function') {
-        return window.ksu.listPackages(type)
+      // 直接使用全局 ksu 对象
+      if (typeof ksu?.listPackages === 'function') {
+        return ksu.listPackages(type)
       }
       throw new Error('KernelSU listPackages not available')
     } catch (e) {
@@ -91,8 +94,9 @@ const ksu = {
   // 获取应用信息 - 同步调用，返回 JSON 字符串
   getPackagesInfo: (packages) => {
     try {
-      if (typeof window.ksu?.getPackagesInfo === 'function') {
-        return window.ksu.getPackagesInfo(JSON.stringify(packages))
+      // 直接使用全局 ksu 对象
+      if (typeof ksu?.getPackagesInfo === 'function') {
+        return ksu.getPackagesInfo(JSON.stringify(packages))
       }
       throw new Error('KernelSU getPackagesInfo not available')
     } catch (e) {
@@ -104,8 +108,9 @@ const ksu = {
   // 显示 Toast
   toast: (message) => {
     try {
-      if (typeof window.ksu?.toast === 'function') {
-        window.ksu.toast(message)
+      // 直接使用全局 ksu 对象
+      if (typeof ksu?.toast === 'function') {
+        ksu.toast(message)
       } else {
         console.log('[Toast]', message)
       }
@@ -194,7 +199,7 @@ export const useAppStore = defineStore('app', () => {
     }
 
     try {
-      const { errno, stdout, stderr } = await ksu.exec(command)
+      const { errno, stdout, stderr } = await ksuApi.exec(command)
       if (errno === 0) {
         const result = JSON.parse(stdout)
         return { ok: true, ...result }
@@ -296,7 +301,7 @@ export const useAppStore = defineStore('app', () => {
       if (type === 'all' || type === 'user') {
         // 获取用户应用
         try {
-          const userPackagesJson = ksu.listPackages('user')
+          const userPackagesJson = ksuApi.listPackages('user')
           console.log('Raw user packages result:', userPackagesJson)
           if (userPackagesJson) {
             const userPackages = JSON.parse(userPackagesJson)
@@ -312,7 +317,7 @@ export const useAppStore = defineStore('app', () => {
       if (type === 'all' || type === 'system') {
         // 获取系统应用
         try {
-          const systemPackagesJson = ksu.listPackages('system')
+          const systemPackagesJson = ksuApi.listPackages('system')
           console.log('Raw system packages result:', systemPackagesJson)
           if (systemPackagesJson) {
             const systemPackages = JSON.parse(systemPackagesJson)
@@ -334,7 +339,7 @@ export const useAppStore = defineStore('app', () => {
       }
 
       // getPackagesInfo 需要传入数组，返回 JSON 字符串
-      const infoJson = ksu.getPackagesInfo(allPackages)
+      const infoJson = ksuApi.getPackagesInfo(allPackages)
       console.log('Raw info result:', infoJson)
 
       if (!infoJson) {
@@ -390,7 +395,7 @@ export const useAppStore = defineStore('app', () => {
       }
     }
     daemonStatus.value = { online: true, version: '1.0.0-demo' }
-    ksu.toast('已加载演示数据')
+    ksuApi.toast('已加载演示数据')
   }
 
   // 配置文件路径
@@ -399,7 +404,7 @@ export const useAppStore = defineStore('app', () => {
   // 直接读取配置文件（备用方案）
   const readConfigFile = async () => {
     try {
-      const result = await ksu.exec(`cat ${CONFIG_PATH} 2>/dev/null || echo '{"version":1,"global":{},"apps":{}}'`)
+      const result = await ksuApi.exec(`cat ${CONFIG_PATH} 2>/dev/null || echo '{"version":1,"global":{},"apps":{}}'`)
       if (result && result.stdout) {
         return JSON.parse(result.stdout)
       }
@@ -413,7 +418,7 @@ export const useAppStore = defineStore('app', () => {
   const writeConfigFile = async (config) => {
     try {
       const configJson = JSON.stringify(config, null, 2)
-      const result = await ksu.exec(`echo '${configJson.replace(/'/g, "'\\''")}' > ${CONFIG_PATH}`)
+      const result = await ksuApi.exec(`echo '${configJson.replace(/'/g, "'\\''")}' > ${CONFIG_PATH}`)
       if (result && result.errno === 0) {
         return true
       }
@@ -517,7 +522,7 @@ export const useAppStore = defineStore('app', () => {
     if (isDemoMode.value) {
       demoConfigs[pkg] = appConfig
       appConfigs.value[pkg] = appConfig
-      ksu.toast('保存成功（演示模式）')
+      ksuApi.toast('保存成功（演示模式）')
       return true
     }
 
@@ -529,7 +534,7 @@ export const useAppStore = defineStore('app', () => {
       })
       if (result && result.ok) {
         appConfigs.value[pkg] = appConfig
-        ksu.toast('保存成功')
+        ksuApi.toast('保存成功')
         return true
       }
     } catch (e) {
@@ -546,12 +551,12 @@ export const useAppStore = defineStore('app', () => {
       const success = await writeConfigFile(config)
       if (success) {
         appConfigs.value[pkg] = appConfig
-        ksu.toast('保存成功')
+        ksuApi.toast('保存成功')
         return true
       }
     } catch (e) {
       console.error('Failed to save app config:', e)
-      ksu.toast('保存失败: ' + e.message)
+      ksuApi.toast('保存失败: ' + e.message)
     }
     return false
   }
@@ -560,7 +565,7 @@ export const useAppStore = defineStore('app', () => {
   const saveGlobalConfig = async (newConfig) => {
     if (isDemoMode.value) {
       globalConfig.value = newConfig
-      ksu.toast('保存成功（演示模式）')
+      ksuApi.toast('保存成功（演示模式）')
       return true
     }
 
@@ -569,7 +574,7 @@ export const useAppStore = defineStore('app', () => {
       const result = await callDaemon('global set', { json: newConfig })
       if (result && result.ok) {
         globalConfig.value = newConfig
-        ksu.toast('保存成功')
+        ksuApi.toast('保存成功')
         return true
       }
     } catch (e) {
@@ -583,12 +588,12 @@ export const useAppStore = defineStore('app', () => {
       const success = await writeConfigFile(config)
       if (success) {
         globalConfig.value = newConfig
-        ksu.toast('保存成功')
+        ksuApi.toast('保存成功')
         return true
       }
     } catch (e) {
       console.error('Failed to save global config:', e)
-      ksu.toast('保存失败: ' + e.message)
+      ksuApi.toast('保存失败: ' + e.message)
     }
     return false
   }
@@ -615,7 +620,7 @@ export const useAppStore = defineStore('app', () => {
     // 备用方案：直接读取日志文件
     try {
       const logFile = `${LOG_DIR}/${pkg}.log`
-      const result = await ksu.exec(`cat ${logFile} 2>/dev/null || echo '[]'`)
+      const result = await ksuApi.exec(`cat ${logFile} 2>/dev/null || echo '[]'`)
       if (result && result.stdout) {
         const logs = JSON.parse(result.stdout)
         if (Array.isArray(logs)) {
@@ -631,7 +636,7 @@ export const useAppStore = defineStore('app', () => {
   // 清空应用日志
   const clearAppLogs = async (pkg) => {
     if (isDemoMode.value) {
-      ksu.toast('日志已清空（演示模式）')
+      ksuApi.toast('日志已清空（演示模式）')
       return true
     }
 
@@ -639,7 +644,7 @@ export const useAppStore = defineStore('app', () => {
       // 首先尝试通过 daemon 清空
       const result = await callDaemon('log clear', { pkg })
       if (result && result.ok) {
-        ksu.toast('日志已清空')
+        ksuApi.toast('日志已清空')
         return true
       }
     } catch (e) {
@@ -649,12 +654,12 @@ export const useAppStore = defineStore('app', () => {
     // 备用方案：直接删除日志文件
     try {
       const logFile = `${LOG_DIR}/${pkg}.log`
-      await ksu.exec(`rm -f ${logFile}`)
-      ksu.toast('日志已清空')
+      await ksuApi.exec(`rm -f ${logFile}`)
+      ksuApi.toast('日志已清空')
       return true
     } catch (e) {
       console.error('Failed to clear logs:', e)
-      ksu.toast('清空失败')
+      ksuApi.toast('清空失败')
     }
     return false
   }
@@ -689,7 +694,7 @@ export const useAppStore = defineStore('app', () => {
 
   // 直接执行命令
   const exec = async (command, options = {}) => {
-    return ksu.exec(command, options)
+    return ksuApi.exec(command, options)
   }
 
   return {
