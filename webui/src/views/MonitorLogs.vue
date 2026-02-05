@@ -114,6 +114,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { toast } from 'kernelsu'
 import { useAppStore } from '../stores/app'
 
 const router = useRouter()
@@ -227,25 +228,19 @@ const executeClear = async () => {
     const result = await appStore.callDaemon('log clear', { pkg: '' })
     if (result && result.ok) {
       logs.value = []
-      // 使用全局 ksu 对象
-      if (typeof ksu?.toast === 'function') {
-        ksu.toast('日志已清空')
-      }
+      // 使用导入的 toast 函数
+      toast('日志已清空')
     } else {
       // 尝试直接清空日志文件
       await appStore.exec('rm -f /data/adb/modules/StorageRedirect/logs/*.log')
       logs.value = []
-      // 使用全局 ksu 对象
-      if (typeof ksu?.toast === 'function') {
-        ksu.toast('日志已清空')
-      }
+      // 使用导入的 toast 函数
+      toast('日志已清空')
     }
   } catch (e) {
     console.error('Failed to clear logs:', e)
-    // 使用全局 ksu 对象
-    if (typeof ksu?.toast === 'function') {
-      ksu.toast('清空日志失败')
-    }
+    // 使用导入的 toast 函数
+    toast('清空日志失败')
   }
   closeClearModal()
 }

@@ -2,6 +2,7 @@ import { createApp } from 'vue'
 import { createRouter, createWebHashHistory } from 'vue-router'
 import { createPinia } from 'pinia'
 import VConsole from 'vconsole'
+import { listPackages, getPackagesInfo, exec, toast } from 'kernelsu'
 import App from './App.vue'
 import AppList from './views/AppList.vue'
 import AppDetail from './views/AppDetail.vue'
@@ -13,10 +14,12 @@ import About from './views/About.vue'
 const vConsole = new VConsole()
 console.log('[StorageRedirect] vConsole initialized')
 
-// 检查 ksu 对象
-console.log('[StorageRedirect] Checking ksu object...')
-console.log('[StorageRedirect] typeof ksu:', typeof ksu)
-console.log('[StorageRedirect] ksu object:', ksu)
+// 检查导入的 kernelsu API
+console.log('[StorageRedirect] Checking kernelsu imports...')
+console.log('[StorageRedirect] typeof listPackages:', typeof listPackages)
+console.log('[StorageRedirect] typeof getPackagesInfo:', typeof getPackagesInfo)
+console.log('[StorageRedirect] typeof exec:', typeof exec)
+console.log('[StorageRedirect] typeof toast:', typeof toast)
 
 const routes = [
   { path: '/', redirect: '/apps' },

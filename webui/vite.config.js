@@ -16,7 +16,9 @@ export default defineConfig({
         entryFileNames: 'assets/[name]-[hash].js',
         chunkFileNames: 'assets/[name]-[hash].js',
         assetFileNames: 'assets/[name]-[hash][extname]'
-      }
+      },
+      // 将 kernelsu 标记为外部模块，由 KernelSU WebView 运行时提供
+      external: ['kernelsu']
     }
   },
   resolve: {

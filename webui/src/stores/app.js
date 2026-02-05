@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { listPackages, getPackagesInfo, exec, toast } from 'kernelsu'
 
 // 示例应用数据
 const demoApps = [
@@ -47,63 +48,41 @@ const demoLogs = [
   { ts: Date.now() - 3000, pkg: 'com.example.demo', proc: 'com.example.demo', pid: 1234, tid: 1234, uid: 10123, op: 'mkdir', path: '/storage/emulated/0/Download/NewFolder', mapped: '/storage/emulated/0/Download/Demo/NewFolder', decision: 'REDIRECT', result: 'OK' }
 ]
 
-// KernelSU API 封装 - 参考示例实现
-// ksu 是 KernelSU 自动注入的全局对象，直接使用 ksu.xxx()
-
-let execCallbackId = 0
+// KernelSU API 封装 - 使用 ES6 模块导入
+// import { listPackages, getPackagesInfo, exec, toast } from 'kernelsu'
 
 const ksuApi = {
-  // 执行命令 - 使用回调机制
-  exec: (command, options = {}) => {
-    return new Promise((resolve, reject) => {
-      const callbackId = `exec_callback_${Date.now()}_${execCallbackId++}`
-
-      window[callbackId] = (errno, stdout, stderr) => {
-        resolve({ errno, stdout, stderr })
-        delete window[callbackId]
-      }
-
-      try {
-        // 直接使用全局 ksu 对象
-        if (typeof ksu?.exec === 'function') {
-          ksu.exec(command, JSON.stringify(options || {}), callbackId)
-        } else {
-          throw new Error('KernelSU exec not available')
-        }
-      } catch (e) {
-        delete window[callbackId]
-        reject(e)
-      }
-    })
+  // 执行命令 - 使用导入的 exec 函数
+  exec: async (command, options = {}) => {
+    try {
+      console.log('[ksuApi] exec called:', command)
+      const result = await exec(command, options)
+      console.log('[ksuApi] exec result:', result)
+      return result
+    } catch (e) {
+      console.error('[ksuApi] exec error:', e)
+      throw e
+    }
   },
 
-  // 获取应用列表 - 同步调用，直接返回数组（不是 JSON 字符串！）
+  // 获取应用列表 - 使用导入的 listPackages 函数
   listPackages: (type = 'all') => {
     try {
-      // 直接使用全局 ksu 对象
       console.log('[ksuApi] listPackages called with type:', type)
-      console.log('[ksuApi] typeof ksu:', typeof ksu)
-      console.log('[ksuApi] typeof ksu?.listPackages:', typeof ksu?.listPackages)
-
-      if (typeof ksu?.listPackages === 'function') {
-        const result = ksu.listPackages(type)
-        console.log('[ksuApi] listPackages raw result:', result)
-        console.log('[ksuApi] listPackages result type:', typeof result)
-        console.log('[ksuApi] listPackages is array:', Array.isArray(result))
-        // 官方 API 直接返回数组，不是 JSON 字符串
-        return result
-      }
-      throw new Error('KernelSU listPackages not available')
+      // 使用导入的 listPackages 函数
+      const result = listPackages(type)
+      console.log('[ksuApi] listPackages result:', result)
+      console.log('[ksuApi] listPackages is array:', Array.isArray(result))
+      return result
     } catch (e) {
       console.error('[ksuApi] listPackages error:', e)
       throw e
     }
   },
 
-  // 获取应用信息 - 同步调用，直接返回数组（不是 JSON 字符串！）
+  // 获取应用信息 - 使用导入的 getPackagesInfo 函数
   getPackagesInfo: (packages) => {
     try {
-      // 直接使用全局 ksu 对象
       console.log('[ksuApi] getPackagesInfo called')
       console.log('[ksuApi] packages param:', packages)
       console.log('[ksuApi] packages is array:', Array.isArray(packages))
@@ -115,30 +94,22 @@ const ksuApi = {
 
       console.log('[ksuApi] packages count:', packages.length)
 
-      if (typeof ksu?.getPackagesInfo === 'function') {
-        // 官方 API 直接传入数组，返回的也是数组，不是 JSON 字符串
-        const result = ksu.getPackagesInfo(packages)
-        console.log('[ksuApi] getPackagesInfo raw result:', result)
-        console.log('[ksuApi] getPackagesInfo result type:', typeof result)
-        console.log('[ksuApi] getPackagesInfo is array:', Array.isArray(result))
-        return result
-      }
-      throw new Error('KernelSU getPackagesInfo not available')
+      // 使用导入的 getPackagesInfo 函数
+      const result = getPackagesInfo(packages)
+      console.log('[ksuApi] getPackagesInfo result:', result)
+      console.log('[ksuApi] getPackagesInfo is array:', Array.isArray(result))
+      return result
     } catch (e) {
       console.error('[ksuApi] getPackagesInfo error:', e)
       throw e
     }
   },
 
-  // 显示 Toast
+  // 显示 Toast - 使用导入的 toast 函数
   toast: (message) => {
     try {
-      // 直接使用全局 ksu 对象
-      if (typeof ksu?.toast === 'function') {
-        ksu.toast(message)
-      } else {
-        console.log('[Toast]', message)
-      }
+      console.log('[ksuApi] toast:', message)
+      toast(message)
     } catch (e) {
       console.log('[Toast]', message)
     }
@@ -312,13 +283,11 @@ export const useAppStore = defineStore('app', () => {
 
     try {
       console.log('[store] Loading apps...')
-      console.log('[store] typeof ksu:', typeof ksu)
-      console.log('[store] ksu object:', ksu)
-      console.log('[store] typeof ksu?.listPackages:', typeof ksu?.listPackages)
+      console.log('[store] Using imported listPackages from kernelsu module')
 
-      // 检查 KernelSU API 是否可用 - 使用全局 ksu 对象
-      if (typeof ksu?.listPackages !== 'function') {
-        console.error('[store] ksu.listPackages is not available')
+      // 检查 listPackages 函数是否可用
+      if (typeof listPackages !== 'function') {
+        console.error('[store] listPackages is not available')
         throw new Error('KernelSU API 不可用，请在 KernelSU 管理器中打开 WebUI')
       }
 
