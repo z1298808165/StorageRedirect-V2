@@ -234,7 +234,35 @@ const loadDemoData = () => {
   appStore.loadDemoData()
 }
 
+// 等待 KernelSU API 可用
+const waitForKsuApi = (maxRetries = 10, interval = 500) => {
+  return new Promise((resolve) => {
+    let retries = 0
+    const check = () => {
+      retries++
+      console.log(`Checking ksu API (attempt ${retries}/${maxRetries})...`)
+      if (typeof window.ksu?.listPackages === 'function') {
+        console.log('ksu API is available!')
+        resolve(true)
+      } else if (retries >= maxRetries) {
+        console.log('ksu API not available after max retries')
+        resolve(false)
+      } else {
+        setTimeout(check, interval)
+      }
+    }
+    check()
+  })
+}
+
 onMounted(async () => {
+  // 等待 KernelSU API 注入完成
+  const apiAvailable = await waitForKsuApi()
+  
+  if (!apiAvailable) {
+    console.log('KernelSU API not available, will show error state')
+  }
+  
   const success = await appStore.loadApps('all')
   if (success) {
     await appStore.loadAppConfigs()
