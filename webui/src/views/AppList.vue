@@ -172,8 +172,9 @@ const isDemoMode = appStore.isDemoMode
 const filteredApps = computed(() => {
   let result = []
 
-  // 从所有应用开始筛选
-  result = [...appStore.apps]
+  // 从所有应用开始筛选 - 确保 apps.value 是数组
+  const appsList = appStore.apps.value || []
+  result = [...appsList]
 
   // 先按用户/系统筛选
   if (currentTab.value === 'user') {
