@@ -1,0 +1,591 @@
+<template>
+  <div class="app-list">
+    <!-- 搜索和筛选 -->
+    <div class="filter-bar">
+      <div class="search-box">
+        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/>
+          <path d="M21 21l-4.35-4.35"/>
+        </svg>
+        <input
+          v-model="searchQuery"
+          type="text"
+          placeholder="搜索应用名称或包名..."
+          class="search-input"
+        />
+      </div>
+      <div class="filter-tabs">
+        <button
+          v-for="tab in tabs"
+          :key="tab.value"
+          :class="['tab-btn', { active: currentTab === tab.value }]"
+          @click="currentTab = tab.value"
+        >
+          {{ tab.label }}
+        </button>
+      </div>
+    </div>
+
+    <!-- 加载状态 -->
+    <div v-if="loading" class="loading">
+      <div class="spinner"></div>
+      <span>加载中...</span>
+    </div>
+
+    <!-- 错误状态和演示数据按钮 -->
+    <div v-else-if="loadError || apps.length === 0" class="error-state">
+      <svg class="error-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="12" y1="8" x2="12" y2="12"/>
+        <line x1="12" y1="16" x2="12.01" y2="16"/>
+      </svg>
+      <p v-if="loadError">{{ loadError }}</p>
+      <p v-else>无法加载应用列表</p>
+      <p class="hint">当前不在 KernelSU 环境中或 API 不可用</p>
+      <button class="demo-btn" @click="loadDemoData">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polygon points="5 3 19 12 5 21 5 3"/>
+        </svg>
+        加载示例数据
+      </button>
+    </div>
+
+    <!-- 应用列表 -->
+    <div v-else class="apps-container">
+      <!-- 演示模式提示 -->
+      <div v-if="isDemoMode" class="demo-banner">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="12" y1="16" x2="12" y2="12"/>
+          <line x1="12" y1="8" x2="12.01" y2="8"/>
+        </svg>
+        <span>演示模式 - 所有数据为模拟数据</span>
+      </div>
+
+      <!-- 有规则的应用 -->
+      <div v-if="filteredAppsWithRules.length > 0" class="app-section">
+        <h3 class="section-title">
+          已配置规则
+          <span class="count">({{ filteredAppsWithRules.length }})</span>
+        </h3>
+        <div class="app-grid">
+          <div
+            v-for="app in filteredAppsWithRules"
+            :key="app.packageName"
+            class="app-card"
+            @click="goToDetail(app.packageName)"
+          >
+            <div class="app-icon">
+              <img :src="getAppIconUrl(app.packageName)" :alt="app.appLabel" />
+            </div>
+            <div class="app-info">
+              <div class="app-name">
+                {{ app.appLabel }}
+                <span v-if="app.isSystem" class="system-badge">系统</span>
+              </div>
+              <div class="app-package">{{ app.packageName }}</div>
+              <div class="rule-badges">
+                <span v-if="getRuleCount(app).redirect > 0" class="badge redirect">
+                  重定向 {{ getRuleCount(app).redirect }}
+                </span>
+                <span v-if="getRuleCount(app).readOnly > 0" class="badge readonly">
+                  只读 {{ getRuleCount(app).readOnly }}
+                </span>
+              </div>
+            </div>
+            <div class="app-status" :class="{ active: isEnabled(app) }">
+              <span class="status-indicator"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 其他应用 -->
+      <div v-if="filteredAppsWithoutRules.length > 0 && currentTab !== 'configured'" class="app-section" :style="{ marginBottom: '100px' }">
+        <h3 class="section-title">
+          其他应用
+          <span class="count">({{ filteredAppsWithoutRules.length }})</span>
+        </h3>
+        <div class="app-grid">
+          <div
+            v-for="app in filteredAppsWithoutRules"
+            :key="app.packageName"
+            class="app-card"
+            @click="goToDetail(app.packageName)"
+          >
+            <div class="app-icon">
+              <img :src="getAppIconUrl(app.packageName)" :alt="app.appLabel" />
+            </div>
+            <div class="app-info">
+              <div class="app-name">
+                {{ app.appLabel }}
+                <span v-if="app.isSystem" class="system-badge">系统</span>
+              </div>
+              <div class="app-package">{{ app.packageName }}</div>
+              <div class="app-meta">
+                <span class="version">{{ app.versionName }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 空状态 -->
+      <div v-if="filteredApps.length === 0" class="empty-state">
+        <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+          <line x1="9" y1="9" x2="15" y2="15"/>
+          <line x1="15" y1="9" x2="9" y2="15"/>
+        </svg>
+        <p>没有找到匹配的应用</p>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { useAppStore } from '../stores/app'
+
+const router = useRouter()
+const appStore = useAppStore()
+
+const searchQuery = ref('')
+const currentTab = ref('all')
+
+const tabs = [
+  { label: '全部', value: 'all' },
+  { label: '用户应用', value: 'user' },
+  { label: '系统应用', value: 'system' },
+  { label: '已配置', value: 'configured' }
+]
+
+const { apps, loading, loadError, isDemoMode, appsWithRules, appsWithoutRules } = appStore
+
+const filteredApps = computed(() => {
+  let apps = []
+
+  if (currentTab.value === 'configured') {
+    apps = appsWithRules
+  } else {
+    apps = [...appsWithRules, ...appsWithoutRules]
+
+    if (currentTab.value === 'user') {
+      apps = apps.filter(a => !a.isSystem)
+    } else if (currentTab.value === 'system') {
+      apps = apps.filter(a => a.isSystem)
+    }
+  }
+
+  if (searchQuery.value) {
+    const query = searchQuery.value.toLowerCase()
+    apps = apps.filter(app =>
+      app.appLabel.toLowerCase().includes(query) ||
+      app.packageName.toLowerCase().includes(query)
+    )
+  }
+
+  return apps
+})
+
+const filteredAppsWithRules = computed(() => {
+  return filteredApps.value.filter(app => {
+    const config = appStore.appConfigs[app.packageName]
+    return config && (config.enabled ||
+      (config.redirectRules?.length > 0) ||
+      (config.readOnlyRules?.length > 0))
+  })
+})
+
+const filteredAppsWithoutRules = computed(() => {
+  if (currentTab.value === 'configured') return []
+  return filteredApps.value.filter(app => {
+    const config = appStore.appConfigs[app.packageName]
+    return !config || (!config.enabled &&
+      (!config.redirectRules || config.redirectRules.length === 0) &&
+      (!config.readOnlyRules || config.readOnlyRules.length === 0))
+  })
+})
+
+const getAppIconUrl = (pkg) => {
+  return appStore.getAppIconUrl(pkg)
+}
+
+const getRuleCount = (app) => {
+  const config = appStore.appConfigs[app.packageName]
+  if (!config) return { redirect: 0, readOnly: 0 }
+  return {
+    redirect: config.redirectRules?.length || 0,
+    readOnly: config.readOnlyRules?.length || 0
+  }
+}
+
+const isEnabled = (app) => {
+  const config = appStore.appConfigs[app.packageName]
+  return config?.enabled || false
+}
+
+const goToDetail = (pkg) => {
+  router.push(`/app/${pkg}`)
+}
+
+const loadDemoData = () => {
+  appStore.loadDemoData()
+}
+
+onMounted(async () => {
+  const success = await appStore.loadApps('all')
+  if (success) {
+    await appStore.loadAppConfigs()
+  }
+})
+</script>
+
+<style scoped>
+.app-list {
+  padding-bottom: 80px;
+}
+
+.filter-bar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(10px);
+  padding: 16px;
+  border-radius: 16px;
+  margin-bottom: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.search-box {
+  position: relative;
+  margin-bottom: 12px;
+}
+
+.search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
+  color: #9ca3af;
+}
+
+.search-input {
+  width: 100%;
+  padding: 12px 16px 12px 44px;
+  background: #f5f6fa;
+  border: none;
+  border-radius: 12px;
+  color: #1a1a2e;
+  font-size: 15px;
+  outline: none;
+  transition: all 0.3s;
+}
+
+.search-input:focus {
+  background: #eef0f5;
+  box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.2);
+}
+
+.search-input::placeholder {
+  color: #9ca3af;
+}
+
+.filter-tabs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.filter-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.tab-btn {
+  padding: 8px 16px;
+  background: #f5f6fa;
+  border: none;
+  border-radius: 20px;
+  color: #6b7280;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.3s;
+  white-space: nowrap;
+}
+
+.tab-btn.active {
+  background: linear-gradient(135deg, #8b5cf6 0%, #a855f7 100%);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+}
+
+.loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: #9ca3af;
+  gap: 16px;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(139, 92, 246, 0.3);
+  border-top-color: #8b5cf6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: #6b7280;
+  text-align: center;
+}
+
+.error-icon {
+  width: 64px;
+  height: 64px;
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.error-state p {
+  margin-bottom: 8px;
+}
+
+.error-state .hint {
+  font-size: 13px;
+  color: #9ca3af;
+  margin-bottom: 20px;
+}
+
+.demo-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  background: linear-gradient(135deg, #8b5cf6 0%, #a855f7 100%);
+  border: none;
+  border-radius: 12px;
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s;
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+}
+
+.demo-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(139, 92, 246, 0.4);
+}
+
+.demo-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.demo-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  border-radius: 12px;
+  margin-bottom: 16px;
+  color: #f59e0b;
+  font-size: 13px;
+}
+
+.demo-banner svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.app-section {
+  margin-bottom: 24px;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #6b7280;
+  margin-bottom: 12px;
+  padding: 0 4px;
+}
+
+.section-title .count {
+  font-weight: 400;
+  color: #9ca3af;
+}
+
+.app-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.app-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  background: #fff;
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all 0.3s;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+.app-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+.app-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #f5f6fa;
+  flex-shrink: 0;
+}
+
+.app-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.app-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.app-name {
+  font-size: 15px;
+  font-weight: 500;
+  color: #1a1a2e;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.system-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  background: #f5f6fa;
+  border-radius: 4px;
+  font-size: 10px;
+  color: #9ca3af;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.app-package {
+  font-size: 12px;
+  color: #9ca3af;
+  margin-bottom: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.version {
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+.rule-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.badge {
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 10px;
+  font-weight: 500;
+}
+
+.badge.redirect {
+  background: rgba(139, 92, 246, 0.1);
+  color: #8b5cf6;
+}
+
+.badge.readonly {
+  background: rgba(245, 158, 11, 0.1);
+  color: #f59e0b;
+}
+
+.app-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+}
+
+.status-indicator {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #e5e7eb;
+  transition: all 0.3s;
+}
+
+.app-status.active .status-indicator {
+  background: #4ade80;
+  box-shadow: 0 0 12px #4ade80;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 20px;
+  color: #9ca3af;
+}
+
+.empty-icon {
+  width: 64px;
+  height: 64px;
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.empty-state p {
+  font-size: 14px;
+}
+</style>
