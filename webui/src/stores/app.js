@@ -7,16 +7,41 @@ let listPackages = null
 let getPackagesInfo = null
 let exec = null
 let toast = null
+let ksuModuleLoaded = false
 
 try {
+  console.log('[store] Trying to import kernelsu module...')
   const ksuModule = await import('kernelsu')
-  listPackages = ksuModule.listPackages
-  getPackagesInfo = ksuModule.getPackagesInfo
-  exec = ksuModule.exec
-  toast = ksuModule.toast
+  console.log('[store] ksuModule:', ksuModule)
+  console.log('[store] typeof ksuModule:', typeof ksuModule)
+  console.log('[store] ksuModule keys:', Object.keys(ksuModule))
+
+  // 检查模块导出方式（ESM 默认导出或命名导出）
+  if (ksuModule.default) {
+    console.log('[store] Using default export')
+    const defaultExport = ksuModule.default
+    listPackages = defaultExport.listPackages
+    getPackagesInfo = defaultExport.getPackagesInfo
+    exec = defaultExport.exec
+    toast = defaultExport.toast
+  } else {
+    console.log('[store] Using named exports')
+    listPackages = ksuModule.listPackages
+    getPackagesInfo = ksuModule.getPackagesInfo
+    exec = ksuModule.exec
+    toast = ksuModule.toast
+  }
+
+  console.log('[store] listPackages:', typeof listPackages)
+  console.log('[store] getPackagesInfo:', typeof getPackagesInfo)
+  console.log('[store] exec:', typeof exec)
+  console.log('[store] toast:', typeof toast)
+
+  ksuModuleLoaded = true
   console.log('[store] kernelsu module loaded successfully')
 } catch (e) {
-  console.warn('[store] Failed to load kernelsu module:', e)
+  console.error('[store] Failed to load kernelsu module:', e)
+  ksuModuleLoaded = false
 }
 
 // 示例应用数据
@@ -68,7 +93,7 @@ const demoLogs = [
 // KernelSU API 封装
 const ksuApi = {
   // 检查 API 是否可用
-  isAvailable: () => listPackages !== null && getPackagesInfo !== null,
+  isAvailable: () => ksuModuleLoaded && listPackages !== null && getPackagesInfo !== null,
 
   // 执行命令 - 使用导入的 exec 函数
   exec: async (command, options = {}) => {
