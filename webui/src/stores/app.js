@@ -46,75 +46,72 @@ const demoLogs = [
   { ts: Date.now() - 3000, pkg: 'com.example.demo', proc: 'com.example.demo', pid: 1234, tid: 1234, uid: 10123, op: 'mkdir', path: '/storage/emulated/0/Download/NewFolder', mapped: '/storage/emulated/0/Download/Demo/NewFolder', decision: 'REDIRECT', result: 'OK' }
 ]
 
-// KernelSU API 封装
-// ksu 是 KernelSU 自动注入的全局对象
-const getKsuApi = () => {
-  // 首先检查 window.ksu 是否存在
-  if (typeof window.ksu === 'object' && window.ksu !== null) {
-    console.log('Found window.ksu:', window.ksu)
-    return window.ksu
-  }
-  
-  // 检查旧版 API
-  if (typeof window.listPackages === 'function') {
-    console.log('Found legacy KernelSU API')
-    return {
-      listPackages: window.listPackages,
-      getPackagesInfo: window.getPackagesInfo,
-      toast: window.toast,
-      exec: window.exec
-    }
-  }
-  
-  console.log('KernelSU API not found. window.ksu:', window.ksu)
-  console.log('window keys:', Object.keys(window).filter(k => k.includes('ksu') || k.includes('exec')))
-  return null
-}
-
-const ksuApi = getKsuApi()
+// KernelSU API 封装 - 参考示例实现
+let execCallbackId = 0
 
 const ksu = {
-  // 执行命令
-  exec: async (command, options = {}) => {
+  // 执行命令 - 使用回调机制
+  exec: (command, options = {}) => {
     return new Promise((resolve, reject) => {
-      const execFunc = ksuApi?.exec || window.exec
-      if (typeof execFunc === 'function') {
-        const callbackId = `exec_cb_${Date.now()}_${Math.random()}`
-        window[callbackId] = (errno, stdout, stderr) => {
-          resolve({ errno, stdout, stderr })
-          delete window[callbackId]
+      const callbackId = `exec_callback_${Date.now()}_${execCallbackId++}`
+      
+      window[callbackId] = (errno, stdout, stderr) => {
+        resolve({ errno, stdout, stderr })
+        delete window[callbackId]
+      }
+      
+      try {
+        // 直接使用 ksu.exec，不传 callbackId 给外部
+        if (typeof window.ksu?.exec === 'function') {
+          window.ksu.exec(command, JSON.stringify(options || {}), callbackId)
+        } else if (typeof ksu.exec === 'function') {
+          // 如果 ksu 是全局对象
+          ksu.exec(command, JSON.stringify(options || {}), callbackId)
+        } else {
+          throw new Error('KernelSU exec not available')
         }
-        execFunc(command, JSON.stringify(options || {}), callbackId)
-      } else {
-        reject(new Error('KernelSU exec not available'))
+      } catch (e) {
+        delete window[callbackId]
+        reject(e)
       }
     })
   },
 
-  // 获取应用列表
+  // 获取应用列表 - 同步调用，返回 JSON 字符串
   listPackages: (type = 'all') => {
-    const fn = ksuApi?.listPackages || window.listPackages
-    if (typeof fn === 'function') {
-      return fn(type)
+    try {
+      if (typeof window.ksu?.listPackages === 'function') {
+        return window.ksu.listPackages(type)
+      }
+      throw new Error('KernelSU listPackages not available')
+    } catch (e) {
+      console.error('listPackages error:', e)
+      throw e
     }
-    throw new Error('KernelSU listPackages not available')
   },
 
-  // 获取应用信息
+  // 获取应用信息 - 同步调用，返回 JSON 字符串
   getPackagesInfo: (packages) => {
-    const fn = ksuApi?.getPackagesInfo || window.getPackagesInfo
-    if (typeof fn === 'function') {
-      return fn(JSON.stringify(packages))
+    try {
+      if (typeof window.ksu?.getPackagesInfo === 'function') {
+        return window.ksu.getPackagesInfo(JSON.stringify(packages))
+      }
+      throw new Error('KernelSU getPackagesInfo not available')
+    } catch (e) {
+      console.error('getPackagesInfo error:', e)
+      throw e
     }
-    throw new Error('KernelSU getPackagesInfo not available')
   },
 
   // 显示 Toast
   toast: (message) => {
-    const fn = ksuApi?.toast || window.toast
-    if (typeof fn === 'function') {
-      fn(message)
-    } else {
+    try {
+      if (typeof window.ksu?.toast === 'function') {
+        window.ksu.toast(message)
+      } else {
+        console.log('[Toast]', message)
+      }
+    } catch (e) {
       console.log('[Toast]', message)
     }
   }
@@ -199,11 +196,9 @@ export const useAppStore = defineStore('app', () => {
     }
 
     try {
-      const callbackId = `exec_cb_${Date.now()}_${Math.random()}`
-      const { errno, stdout, stderr } = await ksu.exec(command, {}, callbackId)
+      const { errno, stdout, stderr } = await ksu.exec(command)
       if (errno === 0) {
         const result = JSON.parse(stdout)
-        // 转换 daemonctl 的输出格式为前端期望的格式
         return { ok: true, ...result }
       }
       throw new Error(`Command failed: ${stderr || stdout}`)
@@ -288,30 +283,40 @@ export const useAppStore = defineStore('app', () => {
     loadError.value = null
 
     try {
-      console.log('Loading apps, checking ksu availability...')
+      console.log('Loading apps...')
       console.log('window.ksu:', window.ksu)
-      console.log('window.ksu?.listPackages:', window.ksu?.listPackages)
+      console.log('typeof window.ksu?.listPackages:', typeof window.ksu?.listPackages)
 
-      // 检查是否在 KernelSU 环境中
+      // 检查 KernelSU API 是否可用
       if (typeof window.ksu?.listPackages !== 'function') {
         throw new Error('KernelSU API 不可用，请在 KernelSU 管理器中打开 WebUI')
       }
 
       // listPackages 返回 JSON 字符串数组
       const packagesJson = ksu.listPackages(type)
-      console.log('Packages JSON:', packagesJson)
+      console.log('Raw packages result:', packagesJson)
+      
+      if (!packagesJson) {
+        throw new Error('获取应用列表返回空')
+      }
+      
       const packageNames = JSON.parse(packagesJson)
-      console.log('Package names:', packageNames)
+      console.log('Parsed packages:', packageNames)
 
       if (!packageNames || packageNames.length === 0) {
         throw new Error('获取应用列表为空')
       }
 
-      // getPackagesInfo 需要传入 JSON 字符串数组
+      // getPackagesInfo 需要传入数组，返回 JSON 字符串
       const infoJson = ksu.getPackagesInfo(packageNames)
-      console.log('Info JSON:', infoJson)
+      console.log('Raw info result:', infoJson)
+      
+      if (!infoJson) {
+        throw new Error('获取应用信息返回空')
+      }
+      
       const info = JSON.parse(infoJson)
-      console.log('App info:', info)
+      console.log('Parsed info:', info)
 
       apps.value = info.map(p => ({
         packageName: p.packageName,
@@ -321,6 +326,8 @@ export const useAppStore = defineStore('app', () => {
         isSystem: p.isSystem,
         uid: p.uid
       }))
+      
+      console.log('Loaded apps:', apps.value.length)
       return true
     } catch (e) {
       console.error('Failed to load apps:', e)
