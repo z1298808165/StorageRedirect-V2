@@ -54,14 +54,6 @@ jobs:
         echo "VERSION=$VERSION" >> $GITHUB_ENV
         echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-    - name: Cache npm dependencies
-      uses: actions/cache@v4
-      with:
-        path: ~/.npm
-        key: ${{ runner.os }}-node-${{ hashFiles('webui/package-lock.json') }}
-        restore-keys: |
-          ${{ runner.os }}-node-
-
     - name: Build WebUI
       working-directory: ./webui
       run: |
