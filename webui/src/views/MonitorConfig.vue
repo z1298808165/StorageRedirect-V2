@@ -90,36 +90,6 @@
     </div>
 
     <div class="config-card">
-      <h3>动态更新</h3>
-      
-      <div class="form-group">
-        <label>轮询间隔 (毫秒)</label>
-        <input 
-          v-model.number="config.update.pollIntervalMs" 
-          type="number" 
-          min="1000" 
-          max="60000"
-          class="form-input"
-          @blur="saveConfig"
-        />
-        <p class="hint">应用检查配置更新的时间间隔</p>
-      </div>
-
-      <div class="form-group">
-        <label>操作检查间隔</label>
-        <input 
-          v-model.number="config.update.opCheckInterval" 
-          type="number" 
-          min="1" 
-          max="1000"
-          class="form-input"
-          @blur="saveConfig"
-        />
-        <p class="hint">每 N 次文件操作检查一次配置更新</p>
-      </div>
-    </div>
-
-    <div class="config-card">
       <h3>进程归属</h3>
       
       <div class="form-group">
@@ -492,21 +462,45 @@ const deletePath = () => {
 const saveMonitorPaths = async () => {
   // 将监控路径保存到全局配置
   const pathsConfig = monitorPaths.value.map(p => ({
+    id: p.id,
     path: p.path,
     desc: p.desc,
     operations: p.operations
   }))
-  
+
   const newConfig = {
     ...config.value,
     monitorPaths: pathsConfig
   }
-  
-  await appStore.saveGlobalConfig(newConfig)
+
+  // 更新本地 config
+  config.value = newConfig
+
+  // 保存到 store
+  const success = await appStore.saveGlobalConfig(newConfig)
+  if (success) {
+    console.log('Monitor paths saved successfully')
+  } else {
+    console.error('Failed to save monitor paths')
+    alert('保存失败，请重试')
+  }
 }
 
 const loadMonitorPaths = async () => {
   try {
+    // 首先尝试从全局配置中加载
+    await appStore.loadGlobalConfig()
+    if (appStore.globalConfig && appStore.globalConfig.monitorPaths) {
+      monitorPaths.value = appStore.globalConfig.monitorPaths.map((p, index) => ({
+        id: p.id || Date.now() + index,
+        path: p.path,
+        desc: p.desc || '',
+        operations: p.operations || ['open', 'write', 'delete']
+      }))
+      return
+    }
+
+    // 如果 store 中没有，尝试通过 daemon 获取
     const result = await appStore.callDaemon('global get')
     if (result && result.ok && result.global && result.global.monitorPaths) {
       monitorPaths.value = result.global.monitorPaths.map((p, index) => ({

@@ -71,7 +71,7 @@
         <div class="app-grid">
           <div
             v-for="app in filteredAppsWithRules"
-            :key="app.packageName"
+            :key="app.packageName + '-' + (app.userId || 0)"
             class="app-card"
             @click="goToDetail(app.packageName)"
           >
@@ -82,6 +82,7 @@
               <div class="app-name">
                 {{ app.appLabel }}
                 <span v-if="app.isSystem" class="system-badge">系统</span>
+                <span v-if="app.userId > 0" class="clone-badge">分身</span>
               </div>
               <div class="app-package">{{ app.packageName }}</div>
               <div class="rule-badges">
@@ -93,7 +94,7 @@
                 </span>
               </div>
             </div>
-            <div class="app-status" :class="{ active: isEnabled(app) }">
+            <div class="app-status" :class="getAppStatusClass(app)">
               <span class="status-indicator"></span>
             </div>
           </div>
@@ -109,7 +110,7 @@
         <div class="app-grid">
           <div
             v-for="app in filteredAppsWithoutRules"
-            :key="app.packageName"
+            :key="app.packageName + '-' + (app.userId || 0)"
             class="app-card"
             @click="goToDetail(app.packageName)"
           >
@@ -120,11 +121,13 @@
               <div class="app-name">
                 {{ app.appLabel }}
                 <span v-if="app.isSystem" class="system-badge">系统</span>
+                <span v-if="app.userId > 0" class="clone-badge">分身</span>
               </div>
               <div class="app-package">{{ app.packageName }}</div>
-              <div class="app-meta">
-                <span class="version">{{ app.versionName }}</span>
-              </div>
+              <!-- 未配置规则的应用不显示规则徽章 -->
+            </div>
+            <div class="app-status" :class="getAppStatusClass(app)">
+              <span class="status-indicator"></span>
             </div>
           </div>
         </div>
@@ -166,18 +169,25 @@ const { apps, loading, loadError, isDemoMode } = appStore
 const filteredApps = computed(() => {
   let result = []
 
-  if (currentTab.value === 'configured') {
-    result = appStore.appsWithRules
-  } else {
-    result = [...appStore.appsWithRules, ...appStore.appsWithoutRules]
+  // 从所有应用开始筛选
+  result = [...appStore.apps]
 
-    if (currentTab.value === 'user') {
-      result = result.filter(a => !a.isSystem)
-    } else if (currentTab.value === 'system') {
-      result = result.filter(a => a.isSystem)
-    }
+  // 先按用户/系统筛选
+  if (currentTab.value === 'user') {
+    result = result.filter(a => !a.isSystem)
+  } else if (currentTab.value === 'system') {
+    result = result.filter(a => a.isSystem)
+  } else if (currentTab.value === 'configured') {
+    // 已配置标签：只显示有规则的应用
+    result = result.filter(app => {
+      const config = appStore.appConfigs[app.packageName]
+      return config && (config.enabled ||
+        (config.redirectRules?.length > 0) ||
+        (config.readOnlyRules?.length > 0))
+    })
   }
 
+  // 搜索筛选
   if (searchQuery.value) {
     const query = searchQuery.value.toLowerCase()
     result = result.filter(app =>
@@ -191,6 +201,10 @@ const filteredApps = computed(() => {
 
 const filteredAppsWithRules = computed(() => {
   // 从已过滤的应用列表中筛选出有规则的应用
+  if (currentTab.value === 'configured') {
+    // 已配置标签页：所有显示的应用都有规则
+    return filteredApps.value
+  }
   return filteredApps.value.filter(app => {
     const config = appStore.appConfigs[app.packageName]
     return config && (config.enabled ||
@@ -228,6 +242,27 @@ const isEnabled = (app) => {
   return config?.enabled || false
 }
 
+// 获取应用状态样式类
+// running: 运行中(绿色), stopped: 未运行(灰色), error: 挂载失败(红色)
+const getAppStatusClass = (app) => {
+  const config = appStore.appConfigs[app.packageName]
+  if (!config || !config.enabled) {
+    return 'stopped'
+  }
+  // 检查是否有挂载错误
+  if (config.mountError || config.error) {
+    return 'error'
+  }
+  // 如果有规则且启用，显示运行中
+  if (config.enabled && (
+    (config.redirectRules?.length > 0) ||
+    (config.readOnlyRules?.length > 0)
+  )) {
+    return 'running'
+  }
+  return 'stopped'
+}
+
 const goToDetail = (pkg) => {
   router.push(`/app/${pkg}`)
 }
@@ -258,23 +293,32 @@ const waitForKsuApi = (maxRetries = 10, interval = 500) => {
 }
 
 onMounted(async () => {
+  // 如果已经加载过数据，直接返回
+  if (apps.value.length > 0) {
+    return
+  }
+
   // 等待 KernelSU API 注入完成
   const apiAvailable = await waitForKsuApi()
-  
+
   if (!apiAvailable) {
     console.log('KernelSU API not available, auto loading demo data')
     // API 不可用，自动加载演示数据
     appStore.loadDemoData()
     return
   }
-  
-  const success = await appStore.loadApps('all')
-  if (success) {
-    await appStore.loadAppConfigs()
-  } else {
-    // 加载失败，自动切换到演示模式
-    console.log('Failed to load apps, switching to demo mode')
-    appStore.loadDemoData()
+
+  // 先尝试加载演示数据作为后备
+  appStore.loadDemoData()
+
+  // 然后在后台尝试加载真实数据
+  try {
+    const success = await appStore.loadApps('all')
+    if (success) {
+      await appStore.loadAppConfigs()
+    }
+  } catch (e) {
+    console.log('Failed to load real apps, keeping demo data')
   }
 })
 </script>
@@ -477,6 +521,7 @@ onMounted(async () => {
 
 .app-grid {
   display: grid;
+  grid-template-columns: 1fr;
   gap: 12px;
 }
 
@@ -601,9 +646,34 @@ onMounted(async () => {
   transition: all 0.3s;
 }
 
-.app-status.active .status-indicator {
+/* 运行中 - 绿色 */
+.app-status.running .status-indicator {
   background: #4ade80;
   box-shadow: 0 0 12px #4ade80;
+}
+
+/* 未运行 - 灰色 */
+.app-status.stopped .status-indicator {
+  background: #9ca3af;
+  box-shadow: none;
+}
+
+/* 挂载失败 - 红色 */
+.app-status.error .status-indicator {
+  background: #ef4444;
+  box-shadow: 0 0 12px #ef4444;
+}
+
+/* 分身应用标记 */
+.clone-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  background: rgba(139, 92, 246, 0.1);
+  border-radius: 4px;
+  font-size: 10px;
+  color: #8b5cf6;
+  font-weight: 500;
+  flex-shrink: 0;
 }
 
 .empty-state {

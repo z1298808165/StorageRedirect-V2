@@ -3,14 +3,15 @@ import { ref, computed } from 'vue'
 
 // 示例应用数据
 const demoApps = [
-  { packageName: 'com.example.demo', appLabel: '演示应用', versionName: '1.0.0', versionCode: 1, isSystem: false, uid: 10123 },
-  { packageName: 'com.tencent.mm', appLabel: '微信', versionName: '8.0.0', versionCode: 800, isSystem: false, uid: 10124 },
-  { packageName: 'com.android.settings', appLabel: '设置', versionName: '12.0', versionCode: 1200, isSystem: true, uid: 1000 },
-  { packageName: 'com.google.android.apps.photos', appLabel: 'Google 相册', versionName: '6.0', versionCode: 600, isSystem: false, uid: 10125 },
-  { packageName: 'com.taobao.taobao', appLabel: '淘宝', versionName: '10.0', versionCode: 1000, isSystem: false, uid: 10126 },
-  { packageName: 'com.sina.weibo', appLabel: '微博', versionName: '12.0', versionCode: 1200, isSystem: false, uid: 10127 },
-  { packageName: 'com.baidu.netdisk', appLabel: '百度网盘', versionName: '11.0', versionCode: 1100, isSystem: false, uid: 10128 },
-  { packageName: 'com.android.chrome', appLabel: 'Chrome', versionName: '100.0', versionCode: 10000, isSystem: true, uid: 10129 }
+  { packageName: 'com.example.demo', appLabel: '演示应用', versionName: '1.0.0', versionCode: 1, isSystem: false, uid: 10123, userId: 0 },
+  { packageName: 'com.tencent.mm', appLabel: '微信', versionName: '8.0.0', versionCode: 800, isSystem: false, uid: 10124, userId: 0 },
+  { packageName: 'com.tencent.mm', appLabel: '微信', versionName: '8.0.0', versionCode: 800, isSystem: false, uid: 10124, userId: 10 },
+  { packageName: 'com.android.settings', appLabel: '设置', versionName: '12.0', versionCode: 1200, isSystem: true, uid: 1000, userId: 0 },
+  { packageName: 'com.google.android.apps.photos', appLabel: 'Google 相册', versionName: '6.0', versionCode: 600, isSystem: false, uid: 10125, userId: 0 },
+  { packageName: 'com.taobao.taobao', appLabel: '淘宝', versionName: '10.0', versionCode: 1000, isSystem: false, uid: 10126, userId: 0 },
+  { packageName: 'com.sina.weibo', appLabel: '微博', versionName: '12.0', versionCode: 1200, isSystem: false, uid: 10127, userId: 0 },
+  { packageName: 'com.baidu.netdisk', appLabel: '百度网盘', versionName: '11.0', versionCode: 1100, isSystem: false, uid: 10128, userId: 0 },
+  { packageName: 'com.android.chrome', appLabel: 'Chrome', versionName: '100.0', versionCode: 10000, isSystem: true, uid: 10129, userId: 0 }
 ]
 
 // 示例配置数据
@@ -324,7 +325,8 @@ export const useAppStore = defineStore('app', () => {
         versionName: p.versionName,
         versionCode: p.versionCode,
         isSystem: p.isSystem,
-        uid: p.uid
+        uid: p.uid,
+        userId: p.userId || 0
       }))
       
       console.log('Loaded apps:', apps.value.length)

@@ -192,9 +192,53 @@ const formatType = (type) => {
 
 const loadLogs = async () => {
   try {
-    // Try to load real logs from store
-    const result = await appStore.exec('cat /data/local/tmp/storage_redirect/logs/monitor.log 2>/dev/null || echo "[]"')
-    if (result && result.stdout) {
+    // Try to load real logs from daemon
+    const result = await appStore.callDaemon('log stats')
+    if (result && result.ok) {
+      // If daemon is available, try to load logs from all apps
+      const allApps = appStore.apps
+      let allLogs = []
+
+      for (const app of allApps.slice(0, 10)) { // Limit to first 10 apps for performance
+        try {
+          const appLogs = await appStore.getAppLogs(app.packageName, 20)
+          if (appLogs && appLogs.length > 0) {
+            const formattedLogs = appLogs.map(log => ({
+              id: `${app.packageName}-${log.ts}`,
+              timestamp: formatTimestamp(log.ts),
+              app: app.packageName,
+              appName: app.appLabel,
+              path: log.path || '',
+              file: log.path ? log.path.split('/').pop() : '',
+              action: log.op || 'open',
+              type: log.decision === 'REDIRECT' ? 'redirect' : log.decision === 'DENY_RO' ? 'deny' : 'monitor',
+              redirectTo: log.mapped || '',
+              message: log.result === 'FAIL' ? (log.errno === 13 ? '只读规则阻止写入' : '操作被拒绝') : ''
+            }))
+            allLogs = allLogs.concat(formattedLogs)
+          }
+        } catch (e) {
+          // Ignore errors for individual apps
+        }
+      }
+
+      // Sort by timestamp desc
+      allLogs.sort((a, b) => b.timestamp.localeCompare(a.timestamp))
+
+      if (allLogs.length > 0) {
+        logs.value = allLogs
+        isDemoMode.value = false
+        return
+      }
+    }
+  } catch (e) {
+    console.error('Failed to load logs from daemon:', e)
+  }
+
+  // Fallback: try to load from file directly
+  try {
+    const result = await appStore.exec('cat /data/adb/modules/StorageRedirect/logs/access.log 2>/dev/null || echo "[]"')
+    if (result && result.stdout && result.stdout !== '[]') {
       try {
         const parsed = JSON.parse(result.stdout)
         if (Array.isArray(parsed) && parsed.length > 0) {
@@ -203,22 +247,51 @@ const loadLogs = async () => {
           return
         }
       } catch (e) {
-        // Parse error, use demo data
+        // Parse error
       }
     }
   } catch (e) {
-    // Error loading, use demo data
+    // Error loading from file
   }
-  
-  // Use demo data
+
+  // Use demo data as final fallback
   logs.value = demoLogs
   isDemoMode.value = true
 }
 
+const formatTimestamp = (ts) => {
+  const date = new Date(ts)
+  return date.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  }).replace(/\//g, '-')
+}
+
 const loadMonitorPaths = async () => {
   try {
-    const result = await appStore.exec('cat /data/local/tmp/storage_redirect/config/monitor_paths.json 2>/dev/null || echo "[]"')
-    if (result && result.stdout) {
+    // Try to load from store first
+    await appStore.loadGlobalConfig()
+    if (appStore.globalConfig && appStore.globalConfig.monitorPaths) {
+      monitorPaths.value = appStore.globalConfig.monitorPaths.map((p, index) => ({
+        id: p.id || index,
+        path: p.path,
+        desc: p.desc || '',
+        operations: p.operations || ['open', 'write', 'delete']
+      }))
+      return
+    }
+  } catch (e) {
+    console.error('Failed to load monitor paths from store:', e)
+  }
+
+  // Fallback: try to load from file
+  try {
+    const result = await appStore.exec('cat /data/adb/modules/StorageRedirect/config/monitor_paths.json 2>/dev/null || echo "[]"')
+    if (result && result.stdout && result.stdout !== '[]') {
       try {
         const parsed = JSON.parse(result.stdout)
         if (Array.isArray(parsed) && parsed.length > 0) {
@@ -230,10 +303,10 @@ const loadMonitorPaths = async () => {
       }
     }
   } catch (e) {
-    // Error loading
+    // Error loading from file
   }
-  
-  // Use demo data
+
+  // Use demo data as fallback
   monitorPaths.value = demoMonitorPaths
 }
 

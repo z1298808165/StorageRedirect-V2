@@ -202,6 +202,40 @@
       </div>
     </div>
 
+    <!-- 错误日志 -->
+    <div v-if="currentTab === 'errors'" class="tab-content">
+      <div class="section-header">
+        <h3>错误日志</h3>
+        <button v-if="errorLogs.length > 0" class="add-btn secondary" @click="clearErrorLogs">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="3 6 5 6 21 6"/>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+          </svg>
+          清空
+        </button>
+      </div>
+
+      <div v-if="errorLogs.length > 0" class="logs-list">
+        <div
+          v-for="(log, index) in errorLogs"
+          :key="index"
+          class="log-entry error-log"
+        >
+          <div class="log-header">
+            <span class="log-time">{{ log.time }}</span>
+            <span class="log-type error">{{ log.type }}</span>
+          </div>
+          <div class="log-message error-message">{{ log.message }}</div>
+          <div v-if="log.details" class="log-details">{{ log.details }}</div>
+        </div>
+      </div>
+
+      <div v-else class="empty-rules">
+        <p>暂无错误记录</p>
+        <p class="hint">规则挂载失败时将记录错误信息</p>
+      </div>
+    </div>
+
     <!-- 重定向规则弹窗 -->
     <div v-if="showRedirectModal" class="modal-overlay">
       <div class="modal-content">
@@ -311,11 +345,13 @@ const appStore = useAppStore()
 const currentTab = ref('redirect')
 const appInfo = ref(null)
 const logs = ref([])
+const errorLogs = ref([])
 
 const tabs = [
   { id: 'redirect', name: '重定向' },
   { id: 'readonly', name: '只读' },
-  { id: 'logs', name: '日志' }
+  { id: 'logs', name: '日志' },
+  { id: 'errors', name: '错误' }
 ]
 
 const config = ref({
@@ -324,6 +360,27 @@ const config = ref({
   readOnlyRules: [],
   monitorPaths: []
 })
+
+// 确保配置对象有正确的结构
+const ensureConfigStructure = () => {
+  if (!config.value) {
+    config.value = {
+      enabled: false,
+      redirectRules: [],
+      readOnlyRules: [],
+      monitorPaths: []
+    }
+  }
+  if (!Array.isArray(config.value.redirectRules)) {
+    config.value.redirectRules = []
+  }
+  if (!Array.isArray(config.value.readOnlyRules)) {
+    config.value.readOnlyRules = []
+  }
+  if (!Array.isArray(config.value.monitorPaths)) {
+    config.value.monitorPaths = []
+  }
+}
 
 // 弹窗状态
 const showRedirectModal = ref(false)
@@ -348,6 +405,7 @@ const getTabCount = (tabId) => {
     case 'redirect': return config.value.redirectRules?.length || 0
     case 'readonly': return config.value.readOnlyRules?.length || 0
     case 'logs': return logs.value.length
+    case 'errors': return errorLogs.value.length
     default: return 0
   }
 }
@@ -358,10 +416,11 @@ const goBack = () => {
 
 // 重定向规则
 const openRedirectModal = (index = null) => {
+  ensureConfigStructure()
   editingRedirectIndex.value = index
-  if (index !== null) {
+  if (index !== null && config.value.redirectRules[index]) {
     const rule = config.value.redirectRules[index]
-    redirectForm.value = { src: rule.src, dst: rule.dst }
+    redirectForm.value = { src: rule.src || '', dst: rule.dst || '' }
   } else {
     redirectForm.value = { src: '', dst: '' }
   }
@@ -419,10 +478,11 @@ const confirmDeleteRedirect = (index) => {
 
 // 只读规则
 const openReadonlyModal = (index = null) => {
+  ensureConfigStructure()
   editingReadonlyIndex.value = index
-  if (index !== null) {
+  if (index !== null && config.value.readOnlyRules[index]) {
     const rule = config.value.readOnlyRules[index]
-    readonlyForm.value = { path: rule.path }
+    readonlyForm.value = { path: rule.path || '' }
   } else {
     readonlyForm.value = { path: '' }
   }
@@ -513,6 +573,26 @@ const clearLogs = async () => {
   }
 }
 
+const loadErrorLogs = async () => {
+  // 从配置中加载错误日志
+  const savedConfig = await appStore.getAppConfig(props.pkg)
+  if (savedConfig && savedConfig.errorLogs) {
+    errorLogs.value = savedConfig.errorLogs
+  } else {
+    errorLogs.value = []
+  }
+}
+
+const clearErrorLogs = async () => {
+  errorLogs.value = []
+  // 保存到配置
+  const savedConfig = await appStore.getAppConfig(props.pkg)
+  if (savedConfig) {
+    savedConfig.errorLogs = []
+    await appStore.saveAppConfig(props.pkg, savedConfig)
+  }
+}
+
 const formatTime = (ts) => {
   const date = new Date(ts)
   return date.toLocaleString('zh-CN', {
@@ -537,9 +617,9 @@ const formatDecision = (decision) => {
 
 onMounted(async () => {
   // 加载应用信息
-  const apps = await appStore.loadApps('all')
+  await appStore.loadApps('all')
   appInfo.value = appStore.apps.find(a => a.packageName === props.pkg)
-  
+
   // 加载配置
   const savedConfig = await appStore.getAppConfig(props.pkg)
   if (savedConfig) {
@@ -549,10 +629,16 @@ onMounted(async () => {
       readOnlyRules: savedConfig.readOnlyRules || [],
       monitorPaths: savedConfig.monitorPaths || []
     }
+  } else {
+    // 如果没有保存的配置，确保结构正确
+    ensureConfigStructure()
   }
-  
+
   // 加载日志
   await loadLogs()
+
+  // 加载错误日志
+  await loadErrorLogs()
 })
 </script>
 
@@ -1002,6 +1088,38 @@ input:checked + .slider:before {
   color: #8b5cf6;
   margin-top: 4px;
   font-size: 12px;
+}
+
+/* Error Log Styles */
+.log-entry.error-log {
+  border-left: 3px solid #ef4444;
+  background: rgba(239, 68, 68, 0.02);
+}
+
+.log-type.error {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.log-message.error-message {
+  color: #ef4444;
+  font-weight: 500;
+}
+
+.log-details {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: #f5f6fa;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #6b7280;
+  font-family: monospace;
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 
 /* Modal Styles */
