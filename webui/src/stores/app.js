@@ -48,16 +48,43 @@ const demoLogs = [
 
 // KernelSU API 封装
 // ksu 是 KernelSU 自动注入的全局对象
-const ksu = window.ksu || {
+const getKsuApi = () => {
+  // 首先检查 window.ksu 是否存在
+  if (typeof window.ksu === 'object' && window.ksu !== null) {
+    console.log('Found window.ksu:', window.ksu)
+    return window.ksu
+  }
+  
+  // 检查旧版 API
+  if (typeof window.listPackages === 'function') {
+    console.log('Found legacy KernelSU API')
+    return {
+      listPackages: window.listPackages,
+      getPackagesInfo: window.getPackagesInfo,
+      toast: window.toast,
+      exec: window.exec
+    }
+  }
+  
+  console.log('KernelSU API not found. window.ksu:', window.ksu)
+  console.log('window keys:', Object.keys(window).filter(k => k.includes('ksu') || k.includes('exec')))
+  return null
+}
+
+const ksuApi = getKsuApi()
+
+const ksu = {
   // 执行命令
-  exec: async (command, options = {}, callbackId) => {
+  exec: async (command, options = {}) => {
     return new Promise((resolve, reject) => {
-      if (typeof window.exec === 'function') {
+      const execFunc = ksuApi?.exec || window.exec
+      if (typeof execFunc === 'function') {
+        const callbackId = `exec_cb_${Date.now()}_${Math.random()}`
         window[callbackId] = (errno, stdout, stderr) => {
           resolve({ errno, stdout, stderr })
           delete window[callbackId]
         }
-        window.exec(command, JSON.stringify(options), callbackId)
+        execFunc(command, JSON.stringify(options || {}), callbackId)
       } else {
         reject(new Error('KernelSU exec not available'))
       }
@@ -66,24 +93,27 @@ const ksu = window.ksu || {
 
   // 获取应用列表
   listPackages: (type = 'all') => {
-    if (typeof window.ksu?.listPackages === 'function') {
-      return window.ksu.listPackages(type)
+    const fn = ksuApi?.listPackages || window.listPackages
+    if (typeof fn === 'function') {
+      return fn(type)
     }
     throw new Error('KernelSU listPackages not available')
   },
 
   // 获取应用信息
   getPackagesInfo: (packages) => {
-    if (typeof window.ksu?.getPackagesInfo === 'function') {
-      return window.ksu.getPackagesInfo(JSON.stringify(packages))
+    const fn = ksuApi?.getPackagesInfo || window.getPackagesInfo
+    if (typeof fn === 'function') {
+      return fn(JSON.stringify(packages))
     }
     throw new Error('KernelSU getPackagesInfo not available')
   },
 
   // 显示 Toast
   toast: (message) => {
-    if (typeof window.ksu?.toast === 'function') {
-      window.ksu.toast(message)
+    const fn = ksuApi?.toast || window.toast
+    if (typeof fn === 'function') {
+      fn(message)
     } else {
       console.log('[Toast]', message)
     }
