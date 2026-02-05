@@ -287,11 +287,11 @@ export const useAppStore = defineStore('app', () => {
 
     try {
       console.log('Loading apps...')
-      console.log('window.ksu:', window.ksu)
-      console.log('typeof window.ksu?.listPackages:', typeof window.ksu?.listPackages)
+      console.log('ksu:', typeof ksu)
+      console.log('typeof ksu?.listPackages:', typeof ksu?.listPackages)
 
-      // 检查 KernelSU API 是否可用
-      if (typeof window.ksu?.listPackages !== 'function') {
+      // 检查 KernelSU API 是否可用 - 使用全局 ksu 对象
+      if (typeof ksu?.listPackages !== 'function') {
         throw new Error('KernelSU API 不可用，请在 KernelSU 管理器中打开 WebUI')
       }
 
