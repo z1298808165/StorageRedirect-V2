@@ -272,18 +272,22 @@ const loadDemoData = () => {
 }
 
 // 等待 KernelSU API 可用
-const waitForKsuApi = (maxRetries = 10, interval = 500) => {
+const waitForKsuApi = (maxRetries = 20, interval = 500) => {
   return new Promise((resolve) => {
     let retries = 0
     const check = () => {
       retries++
-      console.log(`Checking ksu API (attempt ${retries}/${maxRetries})...`)
+      console.log(`[AppList] Checking ksu API (attempt ${retries}/${maxRetries})...`)
+      console.log('[AppList] typeof ksu:', typeof ksu)
+      console.log('[AppList] ksu object:', ksu)
+      console.log('[AppList] typeof ksu?.listPackages:', typeof ksu?.listPackages)
+
       // 使用全局 ksu 对象
       if (typeof ksu?.listPackages === 'function') {
-        console.log('ksu API is available!')
+        console.log('[AppList] ksu API is available!')
         resolve(true)
       } else if (retries >= maxRetries) {
-        console.log('ksu API not available after max retries')
+        console.log('[AppList] ksu API not available after max retries')
         resolve(false)
       } else {
         setTimeout(check, interval)
@@ -294,36 +298,43 @@ const waitForKsuApi = (maxRetries = 10, interval = 500) => {
 }
 
 onMounted(async () => {
+  console.log('[AppList] Component mounted')
+  console.log('[AppList] Initial apps count:', apps.value.length)
+
   // 如果已经加载过数据，直接返回
   if (apps.value.length > 0) {
+    console.log('[AppList] Apps already loaded, skipping')
     return
   }
 
   // 等待 KernelSU API 注入完成
+  console.log('[AppList] Waiting for KernelSU API...')
   const apiAvailable = await waitForKsuApi()
 
   if (!apiAvailable) {
-    console.log('KernelSU API not available, auto loading demo data')
+    console.log('[AppList] KernelSU API not available, auto loading demo data')
     // API 不可用，自动加载演示数据
     appStore.loadDemoData()
     return
   }
 
   // API 可用，尝试加载真实数据
-  console.log('KernelSU API available, loading real apps...')
+  console.log('[AppList] KernelSU API available, loading real apps...')
   try {
     const success = await appStore.loadApps('all')
+    console.log('[AppList] loadApps result:', success)
     if (success) {
-      console.log('Real apps loaded successfully')
+      console.log('[AppList] Real apps loaded successfully')
       await appStore.loadAppConfigs()
       // 加载成功后，退出演示模式
       isDemoMode.value = false
+      console.log('[AppList] Demo mode disabled')
     } else {
-      console.log('Failed to load real apps, loading demo data')
+      console.log('[AppList] Failed to load real apps, loading demo data')
       appStore.loadDemoData()
     }
   } catch (e) {
-    console.error('Failed to load real apps, loading demo data:', e)
+    console.error('[AppList] Failed to load real apps, loading demo data:', e)
     appStore.loadDemoData()
   }
 })

@@ -1,12 +1,22 @@
 import { createApp } from 'vue'
 import { createRouter, createWebHashHistory } from 'vue-router'
 import { createPinia } from 'pinia'
+import VConsole from 'vconsole'
 import App from './App.vue'
 import AppList from './views/AppList.vue'
 import AppDetail from './views/AppDetail.vue'
 import MonitorConfig from './views/MonitorConfig.vue'
 import MonitorLogs from './views/MonitorLogs.vue'
 import About from './views/About.vue'
+
+// 初始化 vConsole 用于调试
+const vConsole = new VConsole()
+console.log('[StorageRedirect] vConsole initialized')
+
+// 检查 ksu 对象
+console.log('[StorageRedirect] Checking ksu object...')
+console.log('[StorageRedirect] typeof ksu:', typeof ksu)
+console.log('[StorageRedirect] ksu object:', ksu)
 
 const routes = [
   { path: '/', redirect: '/apps' },

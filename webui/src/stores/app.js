@@ -286,12 +286,14 @@ export const useAppStore = defineStore('app', () => {
     loadError.value = null
 
     try {
-      console.log('Loading apps...')
-      console.log('ksu:', typeof ksu)
-      console.log('typeof ksu?.listPackages:', typeof ksu?.listPackages)
+      console.log('[store] Loading apps...')
+      console.log('[store] typeof ksu:', typeof ksu)
+      console.log('[store] ksu object:', ksu)
+      console.log('[store] typeof ksu?.listPackages:', typeof ksu?.listPackages)
 
       // 检查 KernelSU API 是否可用 - 使用全局 ksu 对象
       if (typeof ksu?.listPackages !== 'function') {
+        console.error('[store] ksu.listPackages is not available')
         throw new Error('KernelSU API 不可用，请在 KernelSU 管理器中打开 WebUI')
       }
 
@@ -301,53 +303,58 @@ export const useAppStore = defineStore('app', () => {
       if (type === 'all' || type === 'user') {
         // 获取用户应用
         try {
+          console.log('[store] Calling ksuApi.listPackages("user")...')
           const userPackagesJson = ksuApi.listPackages('user')
-          console.log('Raw user packages result:', userPackagesJson)
+          console.log('[store] Raw user packages result:', userPackagesJson)
           if (userPackagesJson) {
             const userPackages = JSON.parse(userPackagesJson)
+            console.log('[store] Parsed user packages:', userPackages)
             if (userPackages && userPackages.length > 0) {
               allPackages = allPackages.concat(userPackages)
             }
           }
         } catch (e) {
-          console.error('Failed to load user packages:', e)
+          console.error('[store] Failed to load user packages:', e)
         }
       }
 
       if (type === 'all' || type === 'system') {
         // 获取系统应用
         try {
+          console.log('[store] Calling ksuApi.listPackages("system")...')
           const systemPackagesJson = ksuApi.listPackages('system')
-          console.log('Raw system packages result:', systemPackagesJson)
+          console.log('[store] Raw system packages result:', systemPackagesJson)
           if (systemPackagesJson) {
             const systemPackages = JSON.parse(systemPackagesJson)
+            console.log('[store] Parsed system packages:', systemPackages)
             if (systemPackages && systemPackages.length > 0) {
               allPackages = allPackages.concat(systemPackages)
             }
           }
         } catch (e) {
-          console.error('Failed to load system packages:', e)
+          console.error('[store] Failed to load system packages:', e)
         }
       }
 
       // 去重
       allPackages = [...new Set(allPackages)]
-      console.log('Total unique packages:', allPackages.length)
+      console.log('[store] Total unique packages:', allPackages.length)
 
       if (allPackages.length === 0) {
         throw new Error('获取应用列表为空')
       }
 
       // getPackagesInfo 需要传入数组，返回 JSON 字符串
+      console.log('[store] Calling ksuApi.getPackagesInfo...')
       const infoJson = ksuApi.getPackagesInfo(allPackages)
-      console.log('Raw info result:', infoJson)
+      console.log('[store] Raw info result:', infoJson)
 
       if (!infoJson) {
         throw new Error('获取应用信息返回空')
       }
 
       const info = JSON.parse(infoJson)
-      console.log('Parsed info:', info)
+      console.log('[store] Parsed info count:', info.length)
 
       apps.value = info.map(p => ({
         packageName: p.packageName,
@@ -359,10 +366,10 @@ export const useAppStore = defineStore('app', () => {
         userId: p.userId || 0
       }))
 
-      console.log('Loaded apps:', apps.value.length)
+      console.log('[store] Loaded apps:', apps.value.length)
       return true
     } catch (e) {
-      console.error('Failed to load apps:', e)
+      console.error('[store] Failed to load apps:', e)
       loadError.value = e.message || '未知错误'
       return false
     } finally {
