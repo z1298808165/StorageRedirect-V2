@@ -14,6 +14,9 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./StorageRedirect-V2
     
     steps:
     - name: Checkout
@@ -61,23 +64,23 @@ jobs:
         npm run build
 
     - name: Build Daemon (arm64)
-      working-directory: ./daemon
       run: |
+        cd daemon
         GOOS=android GOARCH=arm64 CGO_ENABLED=0 go build -ldflags="-s -w -X main.Version=${{ env.VERSION }}" -o ../module/bin/sr-daemon-arm64 .
 
     - name: Build Daemon (arm)
-      working-directory: ./daemon
       run: |
+        cd daemon
         GOOS=android GOARCH=arm CGO_ENABLED=0 go build -ldflags="-s -w -X main.Version=${{ env.VERSION }}" -o ../module/bin/sr-daemon-arm .
 
     - name: Build daemonctl (arm64)
-      working-directory: ./daemon/cmd/daemonctl
       run: |
+        cd daemon/cmd/daemonctl
         GOOS=android GOARCH=arm64 CGO_ENABLED=0 go build -ldflags="-s -w" -o ../../../module/bin/daemonctl-arm64 .
 
     - name: Build daemonctl (arm)
-      working-directory: ./daemon/cmd/daemonctl
       run: |
+        cd daemon/cmd/daemonctl
         GOOS=android GOARCH=arm CGO_ENABLED=0 go build -ldflags="-s -w" -o ../../../module/bin/daemonctl-arm .
 
     - name: Create wrapper scripts
@@ -145,13 +148,13 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: ${{ env.MODULE_NAME }}-${{ env.VERSION }}
-        path: release/*.zip
+        path: StorageRedirect-V2/release/*.zip
 
     - name: Create Release
       if: startsWith(github.ref, 'refs/tags/')
       uses: softprops/action-gh-release@v1
       with:
-        files: release/*.zip
+        files: StorageRedirect-V2/release/*.zip
         generate_release_notes: true
         draft: false
         prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
