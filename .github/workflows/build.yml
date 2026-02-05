@@ -79,25 +79,38 @@ jobs:
         npm install
         npm run build
 
+    - name: Setup NDK environment
+      run: |
+        echo "NDK_HOME=$ANDROID_NDK_HOME" >> $GITHUB_ENV
+        echo "NDK_ROOT=$ANDROID_NDK_HOME" >> $GITHUB_ENV
+
     - name: Build Daemon (arm64)
       run: |
         cd daemon
-        GOOS=android GOARCH=arm64 CGO_ENABLED=0 go build -ldflags="-s -w -X main.Version=${{ env.VERSION }}" -o ../module/bin/sr-daemon-arm64 .
+        CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang \
+        CXX=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang++ \
+        GOOS=android GOARCH=arm64 CGO_ENABLED=1 go build -ldflags="-s -w -X main.Version=${{ env.VERSION }}" -o ../module/bin/sr-daemon-arm64 .
 
     - name: Build Daemon (arm)
       run: |
         cd daemon
-        GOOS=android GOARCH=arm CGO_ENABLED=0 go build -ldflags="-s -w -X main.Version=${{ env.VERSION }}" -o ../module/bin/sr-daemon-arm .
+        CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi21-clang \
+        CXX=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi21-clang++ \
+        GOOS=android GOARCH=arm CGO_ENABLED=1 go build -ldflags="-s -w -X main.Version=${{ env.VERSION }}" -o ../module/bin/sr-daemon-arm .
 
     - name: Build daemonctl (arm64)
       run: |
         cd daemon/cmd/daemonctl
-        GOOS=android GOARCH=arm64 CGO_ENABLED=0 go build -ldflags="-s -w" -o ../../../module/bin/daemonctl-arm64 .
+        CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang \
+        CXX=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang++ \
+        GOOS=android GOARCH=arm64 CGO_ENABLED=1 go build -ldflags="-s -w" -o ../../../module/bin/daemonctl-arm64 .
 
     - name: Build daemonctl (arm)
       run: |
         cd daemon/cmd/daemonctl
-        GOOS=android GOARCH=arm CGO_ENABLED=0 go build -ldflags="-s -w" -o ../../../module/bin/daemonctl-arm .
+        CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi21-clang \
+        CXX=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi21-clang++ \
+        GOOS=android GOARCH=arm CGO_ENABLED=1 go build -ldflags="-s -w" -o ../../../module/bin/daemonctl-arm .
 
     - name: Create wrapper scripts
       run: |
