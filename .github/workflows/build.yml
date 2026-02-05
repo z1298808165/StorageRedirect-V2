@@ -84,6 +84,32 @@ jobs:
         echo "NDK_HOME=$ANDROID_NDK_HOME" >> $GITHUB_ENV
         echo "NDK_ROOT=$ANDROID_NDK_HOME" >> $GITHUB_ENV
 
+    - name: Build Zygisk Module (arm64)
+      run: |
+        cd native
+        mkdir -p build
+        cd build
+        cmake -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake \
+              -DANDROID_ABI=arm64-v8a \
+              -DANDROID_PLATFORM=android-26 \
+              ..
+        make -j$(nproc)
+        mkdir -p ../../module/zygisk
+        cp libstorage-redirect.so ../../module/zygisk/arm64-v8a.so
+
+    - name: Build Zygisk Module (arm)
+      run: |
+        cd native
+        mkdir -p build_arm
+        cd build_arm
+        cmake -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake \
+              -DANDROID_ABI=armeabi-v7a \
+              -DANDROID_PLATFORM=android-26 \
+              ..
+        make -j$(nproc)
+        mkdir -p ../../module/zygisk
+        cp libstorage-redirect.so ../../module/zygisk/armeabi-v7a.so
+
     - name: Build Daemon (arm64)
       run: |
         cd daemon
@@ -166,19 +192,19 @@ jobs:
         fi
         sed -i "s/versionCode=.*/versionCode=$VERSION_CODE/" module/module.prop
 
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: ${{ env.MODULE_NAME }}-${{ env.VERSION }}
-        path: module/
-
-    - name: Create module zip for release
-      if: startsWith(github.ref, 'refs/tags/')
+    - name: Create module zip
       run: |
         mkdir -p release
         cd module
         zip -r "../release/${{ env.MODULE_NAME }}-${{ env.VERSION }}.zip" . -x "*.git*" -x "*.DS_Store"
         cd ..
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ env.MODULE_NAME }}-${{ env.VERSION }}
+        path: release/*.zip
+        compression-level: 0
 
     - name: Create Release
       if: startsWith(github.ref, 'refs/tags/')

@@ -258,13 +258,30 @@ export const useAppStore = defineStore('app', () => {
     loadError.value = null
 
     try {
+      console.log('Loading apps, checking ksu availability...')
+      console.log('window.ksu:', window.ksu)
+      console.log('window.ksu?.listPackages:', window.ksu?.listPackages)
+
+      // 检查是否在 KernelSU 环境中
+      if (typeof window.ksu?.listPackages !== 'function') {
+        throw new Error('KernelSU API 不可用，请在 KernelSU 管理器中打开 WebUI')
+      }
+
       // listPackages 返回 JSON 字符串数组
       const packagesJson = ksu.listPackages(type)
+      console.log('Packages JSON:', packagesJson)
       const packageNames = JSON.parse(packagesJson)
+      console.log('Package names:', packageNames)
+
+      if (!packageNames || packageNames.length === 0) {
+        throw new Error('获取应用列表为空')
+      }
 
       // getPackagesInfo 需要传入 JSON 字符串数组
       const infoJson = ksu.getPackagesInfo(packageNames)
+      console.log('Info JSON:', infoJson)
       const info = JSON.parse(infoJson)
+      console.log('App info:', info)
 
       apps.value = info.map(p => ({
         packageName: p.packageName,
@@ -277,7 +294,7 @@ export const useAppStore = defineStore('app', () => {
       return true
     } catch (e) {
       console.error('Failed to load apps:', e)
-      loadError.value = e.message
+      loadError.value = e.message || '未知错误'
       return false
     } finally {
       loading.value = false
@@ -287,6 +304,8 @@ export const useAppStore = defineStore('app', () => {
   // 加载演示数据
   const loadDemoData = () => {
     isDemoMode.value = true
+    loadError.value = null
+    loading.value = false
     apps.value = demoApps
     appConfigs.value = demoConfigs
     globalConfig.value = {
