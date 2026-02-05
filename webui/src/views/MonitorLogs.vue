@@ -8,9 +8,17 @@
         </svg>
       </button>
       <h1>访问日志</h1>
-      <div class="daemon-status">
-        <span class="status-dot"></span>
-        <span>{{ isDemoMode ? '演示模式' : '运行中' }}</span>
+      <div class="header-actions">
+        <button class="clear-btn" @click="showClearConfirm" title="清空日志">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="3 6 5 6 21 6"/>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+          </svg>
+        </button>
+        <div class="daemon-status">
+          <span class="status-dot"></span>
+          <span>{{ isDemoMode ? '演示模式' : '运行中' }}</span>
+        </div>
       </div>
     </header>
 
@@ -87,6 +95,19 @@
         <p class="hint">开启监控后将记录文件访问操作</p>
       </div>
     </div>
+
+    <!-- 清空日志确认弹窗 -->
+    <div v-if="showClearModal" class="modal-overlay" @click.self="closeClearModal">
+      <div class="modal-content confirm-modal">
+        <div class="confirm-icon">⚠️</div>
+        <h3>确认清空日志</h3>
+        <p>确定要清空所有访问日志吗？此操作不可恢复。</p>
+        <div class="confirm-actions">
+          <button class="btn-secondary" @click="closeClearModal">取消</button>
+          <button class="btn-danger" @click="executeClear">清空</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -123,6 +144,8 @@ const demoMonitorPaths = [
   { id: 1, path: '/storage/emulated/0/Pictures', desc: '相册目录', operations: ['open', 'write', 'delete'] },
   { id: 2, path: '/storage/emulated/0/Download', desc: '下载目录', operations: ['open', 'write'] }
 ]
+
+const showClearModal = ref(false)
 
 const uniqueApps = computed(() => {
   const apps = new Map()
@@ -188,6 +211,34 @@ const formatType = (type) => {
     'deny': '阻止'
   }
   return map[type] || type
+}
+
+const showClearConfirm = () => {
+  showClearModal.value = true
+}
+
+const closeClearModal = () => {
+  showClearModal.value = false
+}
+
+const executeClear = async () => {
+  try {
+    // 调用 daemon 清空所有日志
+    const result = await appStore.callDaemon('log clear', { pkg: '' })
+    if (result && result.ok) {
+      logs.value = []
+      ksu.toast('日志已清空')
+    } else {
+      // 尝试直接清空日志文件
+      await appStore.exec('rm -f /data/adb/modules/StorageRedirect/logs/*.log')
+      logs.value = []
+      ksu.toast('日志已清空')
+    }
+  } catch (e) {
+    console.error('Failed to clear logs:', e)
+    ksu.toast('清空日志失败')
+  }
+  closeClearModal()
 }
 
 const loadLogs = async () => {
@@ -340,6 +391,36 @@ onMounted(async () => {
   font-size: 20px;
   font-weight: 700;
   color: #1a1a2e;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.clear-btn {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(239, 68, 68, 0.1);
+  border: none;
+  border-radius: 50%;
+  color: #ef4444;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.clear-btn:hover {
+  background: rgba(239, 68, 68, 0.2);
+  transform: scale(1.05);
+}
+
+.clear-btn svg {
+  width: 20px;
+  height: 20px;
 }
 
 .back-btn {
@@ -582,5 +663,86 @@ onMounted(async () => {
 .empty-state .hint {
   font-size: 13px;
   color: #6b7280;
+}
+
+/* Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.modal-content {
+  background: #fff;
+  border-radius: 24px;
+  width: 100%;
+  max-width: 480px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+}
+
+.confirm-modal {
+  text-align: center;
+  padding: 32px;
+}
+
+.confirm-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.confirm-modal h3 {
+  margin-bottom: 8px;
+  color: #1a1a2e;
+}
+
+.confirm-modal p {
+  color: #6b7280;
+  margin-bottom: 24px;
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.confirm-actions button {
+  flex: 1;
+  padding: 14px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s;
+  border: none;
+}
+
+.btn-secondary {
+  background: #f5f6fa;
+  color: #6b7280;
+}
+
+.btn-secondary:hover {
+  background: #eef0f5;
+}
+
+.btn-danger {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+.btn-danger:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(239, 68, 68, 0.4);
 }
 </style>

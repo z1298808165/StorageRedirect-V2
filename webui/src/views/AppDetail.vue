@@ -327,6 +327,32 @@
         </div>
       </div>
     </div>
+
+    <!-- 清空日志确认弹窗 -->
+    <div v-if="showClearLogsModal" class="modal-overlay" @click.self="closeClearLogsModal">
+      <div class="modal-content confirm-modal">
+        <div class="confirm-icon">🗑️</div>
+        <h3>确认清空日志</h3>
+        <p>确定要清空该应用的访问日志吗？此操作不可恢复。</p>
+        <div class="confirm-actions">
+          <button class="btn-secondary" @click="closeClearLogsModal">取消</button>
+          <button class="btn-danger" @click="executeClearLogs">清空</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 清空错误日志确认弹窗 -->
+    <div v-if="showClearErrorLogsModal" class="modal-overlay" @click.self="closeClearErrorLogsModal">
+      <div class="modal-content confirm-modal">
+        <div class="confirm-icon">🗑️</div>
+        <h3>确认清空错误日志</h3>
+        <p>确定要清空该应用的错误日志吗？此操作不可恢复。</p>
+        <div class="confirm-actions">
+          <button class="btn-secondary" @click="closeClearErrorLogsModal">取消</button>
+          <button class="btn-danger" @click="executeClearErrorLogs">清空</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -567,10 +593,22 @@ const loadLogs = async () => {
   logs.value = await appStore.getAppLogs(props.pkg, 50)
 }
 
-const clearLogs = async () => {
+const showClearLogsModal = ref(false)
+const showClearErrorLogsModal = ref(false)
+
+const clearLogs = () => {
+  showClearLogsModal.value = true
+}
+
+const executeClearLogs = async () => {
   if (await appStore.clearAppLogs(props.pkg)) {
     logs.value = []
   }
+  showClearLogsModal.value = false
+}
+
+const closeClearLogsModal = () => {
+  showClearLogsModal.value = false
 }
 
 const loadErrorLogs = async () => {
@@ -583,7 +621,11 @@ const loadErrorLogs = async () => {
   }
 }
 
-const clearErrorLogs = async () => {
+const clearErrorLogs = () => {
+  showClearErrorLogsModal.value = true
+}
+
+const executeClearErrorLogs = async () => {
   errorLogs.value = []
   // 保存到配置
   const savedConfig = await appStore.getAppConfig(props.pkg)
@@ -591,6 +633,11 @@ const clearErrorLogs = async () => {
     savedConfig.errorLogs = []
     await appStore.saveAppConfig(props.pkg, savedConfig)
   }
+  showClearErrorLogsModal.value = false
+}
+
+const closeClearErrorLogsModal = () => {
+  showClearErrorLogsModal.value = false
 }
 
 const formatTime = (ts) => {

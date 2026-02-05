@@ -278,7 +278,7 @@ export const useAppStore = defineStore('app', () => {
     }
   }
 
-  // 加载应用列表
+  // 加载应用列表 - 参考示例实现，分别获取用户应用和系统应用
   const loadApps = async (type = 'all') => {
     loading.value = true
     loadError.value = null
@@ -293,29 +293,57 @@ export const useAppStore = defineStore('app', () => {
         throw new Error('KernelSU API 不可用，请在 KernelSU 管理器中打开 WebUI')
       }
 
-      // listPackages 返回 JSON 字符串数组
-      const packagesJson = ksu.listPackages(type)
-      console.log('Raw packages result:', packagesJson)
-      
-      if (!packagesJson) {
-        throw new Error('获取应用列表返回空')
-      }
-      
-      const packageNames = JSON.parse(packagesJson)
-      console.log('Parsed packages:', packageNames)
+      let allPackages = []
 
-      if (!packageNames || packageNames.length === 0) {
+      // 根据类型获取应用包名列表 - 参考示例代码实现
+      if (type === 'all' || type === 'user') {
+        // 获取用户应用
+        try {
+          const userPackagesJson = ksu.listPackages('user')
+          console.log('Raw user packages result:', userPackagesJson)
+          if (userPackagesJson) {
+            const userPackages = JSON.parse(userPackagesJson)
+            if (userPackages && userPackages.length > 0) {
+              allPackages = allPackages.concat(userPackages)
+            }
+          }
+        } catch (e) {
+          console.error('Failed to load user packages:', e)
+        }
+      }
+
+      if (type === 'all' || type === 'system') {
+        // 获取系统应用
+        try {
+          const systemPackagesJson = ksu.listPackages('system')
+          console.log('Raw system packages result:', systemPackagesJson)
+          if (systemPackagesJson) {
+            const systemPackages = JSON.parse(systemPackagesJson)
+            if (systemPackages && systemPackages.length > 0) {
+              allPackages = allPackages.concat(systemPackages)
+            }
+          }
+        } catch (e) {
+          console.error('Failed to load system packages:', e)
+        }
+      }
+
+      // 去重
+      allPackages = [...new Set(allPackages)]
+      console.log('Total unique packages:', allPackages.length)
+
+      if (allPackages.length === 0) {
         throw new Error('获取应用列表为空')
       }
 
       // getPackagesInfo 需要传入数组，返回 JSON 字符串
-      const infoJson = ksu.getPackagesInfo(packageNames)
+      const infoJson = ksu.getPackagesInfo(allPackages)
       console.log('Raw info result:', infoJson)
-      
+
       if (!infoJson) {
         throw new Error('获取应用信息返回空')
       }
-      
+
       const info = JSON.parse(infoJson)
       console.log('Parsed info:', info)
 
@@ -328,7 +356,7 @@ export const useAppStore = defineStore('app', () => {
         uid: p.uid,
         userId: p.userId || 0
       }))
-      
+
       console.log('Loaded apps:', apps.value.length)
       return true
     } catch (e) {
@@ -368,14 +396,45 @@ export const useAppStore = defineStore('app', () => {
     ksu.toast('已加载演示数据')
   }
 
+  // 配置文件路径
+  const CONFIG_PATH = '/data/adb/modules/StorageRedirect/config/config.json'
+
+  // 直接读取配置文件（备用方案）
+  const readConfigFile = async () => {
+    try {
+      const result = await ksu.exec(`cat ${CONFIG_PATH} 2>/dev/null || echo '{"version":1,"global":{},"apps":{}}'`)
+      if (result && result.stdout) {
+        return JSON.parse(result.stdout)
+      }
+    } catch (e) {
+      console.error('Failed to read config file:', e)
+    }
+    return { version: 1, global: {}, apps: {} }
+  }
+
+  // 直接写入配置文件（备用方案）
+  const writeConfigFile = async (config) => {
+    try {
+      const configJson = JSON.stringify(config, null, 2)
+      const result = await ksu.exec(`echo '${configJson.replace(/'/g, "'\\''")}' > ${CONFIG_PATH}`)
+      if (result && result.errno === 0) {
+        return true
+      }
+    } catch (e) {
+      console.error('Failed to write config file:', e)
+    }
+    return false
+  }
+
   // 加载应用配置列表
   const loadAppConfigs = async () => {
     if (isDemoMode.value) {
       appConfigs.value = demoConfigs
       return
     }
-    
+
     try {
+      // 首先尝试通过 daemon 获取
       const result = await callDaemon('app list')
       if (result && result.ok && result.apps) {
         const configs = {}
@@ -383,6 +442,17 @@ export const useAppStore = defineStore('app', () => {
           configs[app.pkg] = app
         })
         appConfigs.value = configs
+        return
+      }
+    } catch (e) {
+      console.log('Daemon app list failed, trying direct file read:', e)
+    }
+
+    // 备用方案：直接读取配置文件
+    try {
+      const config = await readConfigFile()
+      if (config && config.apps) {
+        appConfigs.value = config.apps
       }
     } catch (e) {
       console.error('Failed to load app configs:', e)
@@ -392,11 +462,23 @@ export const useAppStore = defineStore('app', () => {
   // 加载全局配置
   const loadGlobalConfig = async () => {
     if (isDemoMode.value) return
-    
+
     try {
+      // 首先尝试通过 daemon 获取
       const result = await callDaemon('global get')
       if (result && result.ok && result.global) {
         globalConfig.value = result.global
+        return
+      }
+    } catch (e) {
+      console.log('Daemon global get failed, trying direct file read:', e)
+    }
+
+    // 备用方案：直接读取配置文件
+    try {
+      const config = await readConfigFile()
+      if (config && config.global) {
+        globalConfig.value = config.global
       }
     } catch (e) {
       console.error('Failed to load global config:', e)
@@ -408,12 +490,24 @@ export const useAppStore = defineStore('app', () => {
     if (isDemoMode.value) {
       return demoConfigs[pkg] || null
     }
-    
+
     try {
+      // 首先尝试通过 daemon 获取
       const result = await callDaemon('app get', { pkg })
       if (result && result.ok && result.app) {
         appConfigs.value[pkg] = result.app
         return result.app
+      }
+    } catch (e) {
+      console.log('Daemon app get failed, trying direct file read:', e)
+    }
+
+    // 备用方案：直接读取配置文件
+    try {
+      const config = await readConfigFile()
+      if (config && config.apps && config.apps[pkg]) {
+        appConfigs.value[pkg] = config.apps[pkg]
+        return config.apps[pkg]
       }
     } catch (e) {
       console.error('Failed to get app config:', e)
@@ -422,21 +516,39 @@ export const useAppStore = defineStore('app', () => {
   }
 
   // 保存应用配置
-  const saveAppConfig = async (pkg, config) => {
+  const saveAppConfig = async (pkg, appConfig) => {
     if (isDemoMode.value) {
-      demoConfigs[pkg] = config
-      appConfigs.value[pkg] = config
+      demoConfigs[pkg] = appConfig
+      appConfigs.value[pkg] = appConfig
       ksu.toast('保存成功（演示模式）')
       return true
     }
-    
+
     try {
-      const result = await callDaemon('app set', { 
-        pkg, 
-        json: config 
+      // 首先尝试通过 daemon 保存
+      const result = await callDaemon('app set', {
+        pkg,
+        json: appConfig
       })
       if (result && result.ok) {
-        appConfigs.value[pkg] = config
+        appConfigs.value[pkg] = appConfig
+        ksu.toast('保存成功')
+        return true
+      }
+    } catch (e) {
+      console.log('Daemon app set failed, trying direct file write:', e)
+    }
+
+    // 备用方案：直接写入配置文件
+    try {
+      const config = await readConfigFile()
+      if (!config.apps) {
+        config.apps = {}
+      }
+      config.apps[pkg] = appConfig
+      const success = await writeConfigFile(config)
+      if (success) {
+        appConfigs.value[pkg] = appConfig
         ksu.toast('保存成功')
         return true
       }
@@ -448,17 +560,32 @@ export const useAppStore = defineStore('app', () => {
   }
 
   // 保存全局配置
-  const saveGlobalConfig = async (config) => {
+  const saveGlobalConfig = async (newConfig) => {
     if (isDemoMode.value) {
-      globalConfig.value = config
+      globalConfig.value = newConfig
       ksu.toast('保存成功（演示模式）')
       return true
     }
-    
+
     try {
-      const result = await callDaemon('global set', { json: config })
+      // 首先尝试通过 daemon 保存
+      const result = await callDaemon('global set', { json: newConfig })
       if (result && result.ok) {
-        globalConfig.value = config
+        globalConfig.value = newConfig
+        ksu.toast('保存成功')
+        return true
+      }
+    } catch (e) {
+      console.log('Daemon global set failed, trying direct file write:', e)
+    }
+
+    // 备用方案：直接写入配置文件
+    try {
+      const config = await readConfigFile()
+      config.global = newConfig
+      const success = await writeConfigFile(config)
+      if (success) {
+        globalConfig.value = newConfig
         ksu.toast('保存成功')
         return true
       }
@@ -469,19 +596,37 @@ export const useAppStore = defineStore('app', () => {
     return false
   }
 
+  // 日志目录路径
+  const LOG_DIR = '/data/adb/modules/StorageRedirect/logs'
+
   // 获取应用日志
   const getAppLogs = async (pkg, n = 20) => {
     if (isDemoMode.value) {
       return demoLogs.filter(l => l.pkg === pkg)
     }
-    
+
     try {
+      // 首先尝试通过 daemon 获取
       const result = await callDaemon('log tail', { pkg, n })
       if (result && result.ok && result.entries) {
         return result.entries
       }
     } catch (e) {
-      console.error('Failed to get logs:', e)
+      console.log('Daemon log tail failed, trying direct file read:', e)
+    }
+
+    // 备用方案：直接读取日志文件
+    try {
+      const logFile = `${LOG_DIR}/${pkg}.log`
+      const result = await ksu.exec(`cat ${logFile} 2>/dev/null || echo '[]'`)
+      if (result && result.stdout) {
+        const logs = JSON.parse(result.stdout)
+        if (Array.isArray(logs)) {
+          return logs.slice(-n)
+        }
+      }
+    } catch (e) {
+      console.error('Failed to get logs from file:', e)
     }
     return []
   }
@@ -492,13 +637,24 @@ export const useAppStore = defineStore('app', () => {
       ksu.toast('日志已清空（演示模式）')
       return true
     }
-    
+
     try {
+      // 首先尝试通过 daemon 清空
       const result = await callDaemon('log clear', { pkg })
       if (result && result.ok) {
         ksu.toast('日志已清空')
         return true
       }
+    } catch (e) {
+      console.log('Daemon log clear failed, trying direct file delete:', e)
+    }
+
+    // 备用方案：直接删除日志文件
+    try {
+      const logFile = `${LOG_DIR}/${pkg}.log`
+      await ksu.exec(`rm -f ${logFile}`)
+      ksu.toast('日志已清空')
+      return true
     } catch (e) {
       console.error('Failed to clear logs:', e)
       ksu.toast('清空失败')
@@ -561,6 +717,8 @@ export const useAppStore = defineStore('app', () => {
     clearAppLogs,
     checkDaemon,
     getAppIconUrl,
-    exec
+    exec,
+    readConfigFile,
+    writeConfigFile
   }
 })
