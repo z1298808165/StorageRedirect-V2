@@ -272,27 +272,31 @@ const loadDemoData = () => {
 }
 
 // 等待 KernelSU API 可用
-const waitForKsuApi = (maxRetries = 20, interval = 500) => {
-  return new Promise((resolve) => {
-    let retries = 0
-    const check = () => {
-      retries++
-      console.log(`[AppList] Checking ksu API (attempt ${retries}/${maxRetries})...`)
-      console.log('[AppList] appStore.ksuApi.isAvailable():', appStore.ksuApi?.isAvailable?.())
+const waitForKsuApi = async (maxRetries = 20, interval = 500) => {
+  let retries = 0
+  while (retries < maxRetries) {
+    retries++
+    console.log(`[AppList] Checking ksu API (attempt ${retries}/${maxRetries})...`)
 
-      // 使用 appStore 中的 ksuApi
-      if (appStore.ksuApi?.isAvailable?.()) {
+    // 尝试初始化 API
+    try {
+      const initSuccess = await appStore.ksuApi.init()
+      console.log('[AppList] ksuApi.init() result:', initSuccess)
+      console.log('[AppList] ksuApi.isAvailable():', appStore.ksuApi.isAvailable())
+
+      if (appStore.ksuApi.isAvailable()) {
         console.log('[AppList] KernelSU API is available!')
-        resolve(true)
-      } else if (retries >= maxRetries) {
-        console.log('[AppList] KernelSU API not available after max retries')
-        resolve(false)
-      } else {
-        setTimeout(check, interval)
+        return true
       }
+    } catch (e) {
+      console.error('[AppList] Error initializing ksuApi:', e)
     }
-    check()
-  })
+
+    await new Promise(resolve => setTimeout(resolve, interval))
+  }
+
+  console.log('[AppList] KernelSU API not available after max retries')
+  return false
 }
 
 onMounted(async () => {

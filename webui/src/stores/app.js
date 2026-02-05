@@ -1,47 +1,58 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 
-// 尝试导入 kernelsu 模块
-// 注意：kernelsu 是 KernelSU WebView 提供的内置模块，不需要 npm 安装
-let listPackages = null
-let getPackagesInfo = null
-let exec = null
-let toast = null
+// KernelSU API 将在 store 初始化时加载
+let ksuApis = {
+  listPackages: null,
+  getPackagesInfo: null,
+  exec: null,
+  toast: null
+}
 let ksuModuleLoaded = false
 
-try {
-  console.log('[store] Trying to import kernelsu module...')
-  const ksuModule = await import('kernelsu')
-  console.log('[store] ksuModule:', ksuModule)
-  console.log('[store] typeof ksuModule:', typeof ksuModule)
-  console.log('[store] ksuModule keys:', Object.keys(ksuModule))
+// 初始化 KernelSU API
+const initKsuApi = async () => {
+  if (ksuModuleLoaded) return true
 
-  // 检查模块导出方式（ESM 默认导出或命名导出）
-  if (ksuModule.default) {
-    console.log('[store] Using default export')
-    const defaultExport = ksuModule.default
-    listPackages = defaultExport.listPackages
-    getPackagesInfo = defaultExport.getPackagesInfo
-    exec = defaultExport.exec
-    toast = defaultExport.toast
-  } else {
-    console.log('[store] Using named exports')
-    listPackages = ksuModule.listPackages
-    getPackagesInfo = ksuModule.getPackagesInfo
-    exec = ksuModule.exec
-    toast = ksuModule.toast
+  try {
+    console.log('[store] Trying to import kernelsu module...')
+    const ksuModule = await import('kernelsu')
+    console.log('[store] ksuModule:', ksuModule)
+    console.log('[store] typeof ksuModule:', typeof ksuModule)
+
+    // 获取模块的所有属性
+    const keys = Object.keys(ksuModule)
+    console.log('[store] ksuModule keys:', keys)
+
+    // 检查模块导出方式
+    if (ksuModule.default) {
+      console.log('[store] Using default export')
+      const defaultExport = ksuModule.default
+      ksuApis.listPackages = defaultExport.listPackages
+      ksuApis.getPackagesInfo = defaultExport.getPackagesInfo
+      ksuApis.exec = defaultExport.exec
+      ksuApis.toast = defaultExport.toast
+    } else {
+      console.log('[store] Using named exports')
+      ksuApis.listPackages = ksuModule.listPackages
+      ksuApis.getPackagesInfo = ksuModule.getPackagesInfo
+      ksuApis.exec = ksuModule.exec
+      ksuApis.toast = ksuModule.toast
+    }
+
+    console.log('[store] listPackages:', typeof ksuApis.listPackages)
+    console.log('[store] getPackagesInfo:', typeof ksuApis.getPackagesInfo)
+    console.log('[store] exec:', typeof ksuApis.exec)
+    console.log('[store] toast:', typeof ksuApis.toast)
+
+    ksuModuleLoaded = true
+    console.log('[store] kernelsu module loaded successfully')
+    return true
+  } catch (e) {
+    console.error('[store] Failed to load kernelsu module:', e)
+    ksuModuleLoaded = false
+    return false
   }
-
-  console.log('[store] listPackages:', typeof listPackages)
-  console.log('[store] getPackagesInfo:', typeof getPackagesInfo)
-  console.log('[store] exec:', typeof exec)
-  console.log('[store] toast:', typeof toast)
-
-  ksuModuleLoaded = true
-  console.log('[store] kernelsu module loaded successfully')
-} catch (e) {
-  console.error('[store] Failed to load kernelsu module:', e)
-  ksuModuleLoaded = false
 }
 
 // 示例应用数据
@@ -92,17 +103,20 @@ const demoLogs = [
 
 // KernelSU API 封装
 const ksuApi = {
+  // 初始化 API
+  init: initKsuApi,
+
   // 检查 API 是否可用
-  isAvailable: () => ksuModuleLoaded && listPackages !== null && getPackagesInfo !== null,
+  isAvailable: () => ksuModuleLoaded && ksuApis.listPackages !== null && ksuApis.getPackagesInfo !== null,
 
   // 执行命令 - 使用导入的 exec 函数
   exec: async (command, options = {}) => {
-    if (!exec) {
+    if (!ksuApis.exec) {
       throw new Error('exec API not available')
     }
     try {
       console.log('[ksuApi] exec called:', command)
-      const result = await exec(command, options)
+      const result = await ksuApis.exec(command, options)
       console.log('[ksuApi] exec result:', result)
       return result
     } catch (e) {
@@ -113,12 +127,12 @@ const ksuApi = {
 
   // 获取应用列表 - 使用导入的 listPackages 函数
   listPackages: (type = 'all') => {
-    if (!listPackages) {
+    if (!ksuApis.listPackages) {
       throw new Error('listPackages API not available')
     }
     try {
       console.log('[ksuApi] listPackages called with type:', type)
-      const result = listPackages(type)
+      const result = ksuApis.listPackages(type)
       console.log('[ksuApi] listPackages result:', result)
       console.log('[ksuApi] listPackages is array:', Array.isArray(result))
       return result
@@ -130,7 +144,7 @@ const ksuApi = {
 
   // 获取应用信息 - 使用导入的 getPackagesInfo 函数
   getPackagesInfo: (packages) => {
-    if (!getPackagesInfo) {
+    if (!ksuApis.getPackagesInfo) {
       throw new Error('getPackagesInfo API not available')
     }
     try {
@@ -145,7 +159,7 @@ const ksuApi = {
 
       console.log('[ksuApi] packages count:', packages.length)
 
-      const result = getPackagesInfo(packages)
+      const result = ksuApis.getPackagesInfo(packages)
       console.log('[ksuApi] getPackagesInfo result:', result)
       console.log('[ksuApi] getPackagesInfo is array:', Array.isArray(result))
       return result
@@ -157,13 +171,13 @@ const ksuApi = {
 
   // 显示 Toast - 使用导入的 toast 函数
   toast: (message) => {
-    if (!toast) {
+    if (!ksuApis.toast) {
       console.log('[Toast]', message)
       return
     }
     try {
       console.log('[ksuApi] toast:', message)
-      toast(message)
+      ksuApis.toast(message)
     } catch (e) {
       console.log('[Toast]', message)
     }
@@ -337,6 +351,11 @@ export const useAppStore = defineStore('app', () => {
 
     try {
       console.log('[store] Loading apps...')
+
+      // 首先初始化 KernelSU API
+      console.log('[store] Initializing KernelSU API...')
+      const initSuccess = await ksuApi.init()
+      console.log('[store] KernelSU API init result:', initSuccess)
       console.log('[store] ksuApi.isAvailable():', ksuApi.isAvailable())
 
       // 检查 KernelSU API 是否可用
