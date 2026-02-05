@@ -8,6 +8,7 @@ export default defineConfig({
   build: {
     outDir: '../module/webroot',
     emptyOutDir: true,
+    target: 'esnext', // 支持顶层 await
     rollupOptions: {
       input: {
         main: resolve(__dirname, 'index.html')

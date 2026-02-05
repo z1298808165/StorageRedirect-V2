@@ -149,7 +149,6 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { listPackages } from 'kernelsu'
 import { useAppStore } from '../stores/app'
 
 const router = useRouter()
@@ -279,14 +278,14 @@ const waitForKsuApi = (maxRetries = 20, interval = 500) => {
     const check = () => {
       retries++
       console.log(`[AppList] Checking ksu API (attempt ${retries}/${maxRetries})...`)
-      console.log('[AppList] typeof listPackages:', typeof listPackages)
+      console.log('[AppList] appStore.ksuApi.isAvailable():', appStore.ksuApi?.isAvailable?.())
 
-      // 使用导入的 listPackages 函数
-      if (typeof listPackages === 'function') {
-        console.log('[AppList] listPackages API is available!')
+      // 使用 appStore 中的 ksuApi
+      if (appStore.ksuApi?.isAvailable?.()) {
+        console.log('[AppList] KernelSU API is available!')
         resolve(true)
       } else if (retries >= maxRetries) {
-        console.log('[AppList] listPackages API not available after max retries')
+        console.log('[AppList] KernelSU API not available after max retries')
         resolve(false)
       } else {
         setTimeout(check, interval)

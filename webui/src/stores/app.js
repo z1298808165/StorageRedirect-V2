@@ -1,6 +1,23 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { listPackages, getPackagesInfo, exec, toast } from 'kernelsu'
+
+// 尝试导入 kernelsu 模块
+// 注意：kernelsu 是 KernelSU WebView 提供的内置模块，不需要 npm 安装
+let listPackages = null
+let getPackagesInfo = null
+let exec = null
+let toast = null
+
+try {
+  const ksuModule = await import('kernelsu')
+  listPackages = ksuModule.listPackages
+  getPackagesInfo = ksuModule.getPackagesInfo
+  exec = ksuModule.exec
+  toast = ksuModule.toast
+  console.log('[store] kernelsu module loaded successfully')
+} catch (e) {
+  console.warn('[store] Failed to load kernelsu module:', e)
+}
 
 // 示例应用数据
 const demoApps = [
@@ -48,12 +65,16 @@ const demoLogs = [
   { ts: Date.now() - 3000, pkg: 'com.example.demo', proc: 'com.example.demo', pid: 1234, tid: 1234, uid: 10123, op: 'mkdir', path: '/storage/emulated/0/Download/NewFolder', mapped: '/storage/emulated/0/Download/Demo/NewFolder', decision: 'REDIRECT', result: 'OK' }
 ]
 
-// KernelSU API 封装 - 使用 ES6 模块导入
-// import { listPackages, getPackagesInfo, exec, toast } from 'kernelsu'
-
+// KernelSU API 封装
 const ksuApi = {
+  // 检查 API 是否可用
+  isAvailable: () => listPackages !== null && getPackagesInfo !== null,
+
   // 执行命令 - 使用导入的 exec 函数
   exec: async (command, options = {}) => {
+    if (!exec) {
+      throw new Error('exec API not available')
+    }
     try {
       console.log('[ksuApi] exec called:', command)
       const result = await exec(command, options)
@@ -67,9 +88,11 @@ const ksuApi = {
 
   // 获取应用列表 - 使用导入的 listPackages 函数
   listPackages: (type = 'all') => {
+    if (!listPackages) {
+      throw new Error('listPackages API not available')
+    }
     try {
       console.log('[ksuApi] listPackages called with type:', type)
-      // 使用导入的 listPackages 函数
       const result = listPackages(type)
       console.log('[ksuApi] listPackages result:', result)
       console.log('[ksuApi] listPackages is array:', Array.isArray(result))
@@ -82,6 +105,9 @@ const ksuApi = {
 
   // 获取应用信息 - 使用导入的 getPackagesInfo 函数
   getPackagesInfo: (packages) => {
+    if (!getPackagesInfo) {
+      throw new Error('getPackagesInfo API not available')
+    }
     try {
       console.log('[ksuApi] getPackagesInfo called')
       console.log('[ksuApi] packages param:', packages)
@@ -94,7 +120,6 @@ const ksuApi = {
 
       console.log('[ksuApi] packages count:', packages.length)
 
-      // 使用导入的 getPackagesInfo 函数
       const result = getPackagesInfo(packages)
       console.log('[ksuApi] getPackagesInfo result:', result)
       console.log('[ksuApi] getPackagesInfo is array:', Array.isArray(result))
@@ -107,6 +132,10 @@ const ksuApi = {
 
   // 显示 Toast - 使用导入的 toast 函数
   toast: (message) => {
+    if (!toast) {
+      console.log('[Toast]', message)
+      return
+    }
     try {
       console.log('[ksuApi] toast:', message)
       toast(message)
@@ -283,11 +312,11 @@ export const useAppStore = defineStore('app', () => {
 
     try {
       console.log('[store] Loading apps...')
-      console.log('[store] Using imported listPackages from kernelsu module')
+      console.log('[store] ksuApi.isAvailable():', ksuApi.isAvailable())
 
-      // 检查 listPackages 函数是否可用
-      if (typeof listPackages !== 'function') {
-        console.error('[store] listPackages is not available')
+      // 检查 KernelSU API 是否可用
+      if (!ksuApi.isAvailable()) {
+        console.error('[store] KernelSU API is not available')
         throw new Error('KernelSU API 不可用，请在 KernelSU 管理器中打开 WebUI')
       }
 
@@ -715,6 +744,7 @@ export const useAppStore = defineStore('app', () => {
     loadError,
     appsWithRules,
     appsWithoutRules,
+    ksuApi,
     callDaemon,
     loadApps,
     loadDemoData,
