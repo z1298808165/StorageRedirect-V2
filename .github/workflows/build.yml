@@ -65,7 +65,7 @@ jobs:
     - name: Build WebUI
       working-directory: ./webui
       run: |
-        npm ci
+        npm install
         npm run build
 
     - name: Build Daemon (arm64)
