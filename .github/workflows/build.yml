@@ -55,8 +55,8 @@ jobs:
         echo "version=$VERSION" >> $GITHUB_OUTPUT
 
     - name: Build WebUI
-      working-directory: ./webui
       run: |
+        cd webui
         npm install
         npm run build
 
