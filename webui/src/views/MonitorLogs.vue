@@ -223,22 +223,39 @@ const closeClearModal = () => {
 
 const executeClear = async () => {
   try {
+    let cleared = false
+
     // 调用 daemon 清空所有日志
-    const result = await appStore.callDaemon('log clear', { pkg: '' })
-    if (result && result.ok) {
+    try {
+      const result = await appStore.callDaemon('log clear', { pkg: '' })
+      if (result && result.ok) {
+        cleared = true
+      }
+    } catch (e) {
+      console.log('Daemon log clear failed:', e)
+    }
+
+    // 如果 daemon 失败，尝试直接清空日志文件
+    if (!cleared) {
+      try {
+        // 清空所有日志文件内容而不是删除
+        const result = await appStore.exec('for f in /data/adb/modules/StorageRedirect/logs/*.log; do echo "[]" > "$f" 2>/dev/null; done')
+        if (result && result.errno === 0) {
+          cleared = true
+        }
+      } catch (e) {
+        console.error('Direct file clear failed:', e)
+      }
+    }
+
+    if (cleared) {
       logs.value = []
-      // 使用 appStore 中的 toast
       appStore.ksuApi.toast('日志已清空')
     } else {
-      // 尝试直接清空日志文件
-      await appStore.exec('rm -f /data/adb/modules/StorageRedirect/logs/*.log')
-      logs.value = []
-      // 使用 appStore 中的 toast
-      appStore.ksuApi.toast('日志已清空')
+      appStore.ksuApi.toast('清空日志失败')
     }
   } catch (e) {
     console.error('Failed to clear logs:', e)
-    // 使用 appStore 中的 toast
     appStore.ksuApi.toast('清空日志失败')
   }
   closeClearModal()

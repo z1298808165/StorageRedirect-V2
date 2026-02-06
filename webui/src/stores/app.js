@@ -720,20 +720,23 @@ export const useAppStore = defineStore('app', () => {
   // 保存应用配置
   const saveAppConfig = async (pkg, appConfig) => {
     if (isDemoMode.value) {
-      demoConfigs[pkg] = appConfig
-      appConfigs.value[pkg] = appConfig
+      demoConfigs[pkg] = JSON.parse(JSON.stringify(appConfig))
+      appConfigs.value[pkg] = JSON.parse(JSON.stringify(appConfig))
       ksuApi.toast('保存成功（演示模式）')
       return true
     }
+
+    // 确保配置对象是可序列化的
+    const configToSave = JSON.parse(JSON.stringify(appConfig))
 
     try {
       // 首先尝试通过 daemon 保存
       const result = await callDaemon('app set', {
         pkg,
-        json: appConfig
+        json: configToSave
       })
       if (result && result.ok) {
-        appConfigs.value[pkg] = appConfig
+        appConfigs.value[pkg] = configToSave
         ksuApi.toast('保存成功')
         return true
       }
@@ -747,10 +750,10 @@ export const useAppStore = defineStore('app', () => {
       if (!config.apps) {
         config.apps = {}
       }
-      config.apps[pkg] = appConfig
+      config.apps[pkg] = configToSave
       const success = await writeConfigFile(config)
       if (success) {
-        appConfigs.value[pkg] = appConfig
+        appConfigs.value[pkg] = configToSave
         ksuApi.toast('保存成功')
         return true
       }
@@ -763,17 +766,20 @@ export const useAppStore = defineStore('app', () => {
 
   // 保存全局配置
   const saveGlobalConfig = async (newConfig) => {
+    // 确保配置对象是可序列化的
+    const configToSave = JSON.parse(JSON.stringify(newConfig))
+
     if (isDemoMode.value) {
-      globalConfig.value = newConfig
+      globalConfig.value = configToSave
       ksuApi.toast('保存成功（演示模式）')
       return true
     }
 
     try {
       // 首先尝试通过 daemon 保存
-      const result = await callDaemon('global set', { json: newConfig })
+      const result = await callDaemon('global set', { json: configToSave })
       if (result && result.ok) {
-        globalConfig.value = newConfig
+        globalConfig.value = configToSave
         ksuApi.toast('保存成功')
         return true
       }
@@ -784,10 +790,10 @@ export const useAppStore = defineStore('app', () => {
     // 备用方案：直接写入配置文件
     try {
       const config = await readConfigFile()
-      config.global = newConfig
+      config.global = configToSave
       const success = await writeConfigFile(config)
       if (success) {
-        globalConfig.value = newConfig
+        globalConfig.value = configToSave
         ksuApi.toast('保存成功')
         return true
       }
@@ -810,7 +816,7 @@ export const useAppStore = defineStore('app', () => {
     try {
       // 首先尝试通过 daemon 获取
       const result = await callDaemon('log tail', { pkg, n })
-      if (result && result.ok && result.entries) {
+      if (result && result.ok && Array.isArray(result.entries)) {
         return result.entries
       }
     } catch (e) {
@@ -822,9 +828,29 @@ export const useAppStore = defineStore('app', () => {
       const logFile = `${LOG_DIR}/${pkg}.log`
       const result = await ksuApi.exec(`cat ${logFile} 2>/dev/null || echo '[]'`)
       if (result && result.stdout) {
-        const logs = JSON.parse(result.stdout)
-        if (Array.isArray(logs)) {
-          return logs.slice(-n)
+        try {
+          const logs = JSON.parse(result.stdout)
+          if (Array.isArray(logs)) {
+            return logs.slice(-n)
+          }
+        } catch (parseError) {
+          console.error('Failed to parse logs JSON:', parseError)
+          // 如果不是 JSON 格式，尝试按行解析
+          const lines = result.stdout.trim().split('\n').filter(line => line)
+          return lines.slice(-n).map((line, index) => ({
+            ts: Date.now() - (lines.length - index) * 1000,
+            pkg: pkg,
+            proc: pkg,
+            pid: 0,
+            tid: 0,
+            uid: 0,
+            op: 'unknown',
+            path: line,
+            mapped: '',
+            decision: 'PASS',
+            result: 'OK',
+            errno: 0
+          }))
         }
       }
     } catch (e) {
@@ -840,6 +866,13 @@ export const useAppStore = defineStore('app', () => {
       return true
     }
 
+    // 参数验证
+    if (!pkg || typeof pkg !== 'string') {
+      console.error('Invalid package name for clearAppLogs:', pkg)
+      ksuApi.toast('清空失败: 无效的应用包名')
+      return false
+    }
+
     try {
       // 首先尝试通过 daemon 清空
       const result = await callDaemon('log clear', { pkg })
@@ -851,12 +884,23 @@ export const useAppStore = defineStore('app', () => {
       console.log('Daemon log clear failed, trying direct file delete:', e)
     }
 
-    // 备用方案：直接删除日志文件
+    // 备用方案：直接删除日志文件或清空内容
     try {
       const logFile = `${LOG_DIR}/${pkg}.log`
-      await ksuApi.exec(`rm -f ${logFile}`)
-      ksuApi.toast('日志已清空')
-      return true
+      // 先检查文件是否存在
+      const checkResult = await ksuApi.exec(`test -f ${logFile} && echo 'exists' || echo 'not found'`)
+      if (checkResult && checkResult.stdout && checkResult.stdout.includes('exists')) {
+        // 文件存在，清空内容（保留文件）
+        const result = await ksuApi.exec(`echo '[]' > ${logFile}`)
+        if (result && result.errno === 0) {
+          ksuApi.toast('日志已清空')
+          return true
+        }
+      } else {
+        // 文件不存在，视为成功（没有日志需要清空）
+        console.log('Log file does not exist, nothing to clear')
+        return true
+      }
     } catch (e) {
       console.error('Failed to clear logs:', e)
       ksuApi.toast('清空失败')

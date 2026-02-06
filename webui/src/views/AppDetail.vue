@@ -582,7 +582,22 @@ const moveRule = (type, index, direction) => {
 
 const saveConfig = async () => {
   try {
-    await appStore.saveAppConfig(props.pkg, config.value)
+    // 确保配置结构正确
+    ensureConfigStructure()
+    // 创建要保存的配置对象副本
+    const configToSave = {
+      enabled: config.value.enabled,
+      redirectRules: [...(config.value.redirectRules || [])],
+      readOnlyRules: [...(config.value.readOnlyRules || [])],
+      monitorPaths: [...(config.value.monitorPaths || [])]
+    }
+    const success = await appStore.saveAppConfig(props.pkg, configToSave)
+    if (success) {
+      // 保存成功后更新本地配置
+      config.value = { ...config.value, ...configToSave }
+      // 更新 store 中的配置缓存
+      appStore.appConfigs[props.pkg] = { ...configToSave }
+    }
   } catch (e) {
     console.error('Save config failed:', e)
     alert('保存失败: ' + e.message)
@@ -590,7 +605,30 @@ const saveConfig = async () => {
 }
 
 const loadLogs = async () => {
-  logs.value = await appStore.getAppLogs(props.pkg, 50)
+  try {
+    const appLogs = await appStore.getAppLogs(props.pkg, 50)
+    if (Array.isArray(appLogs)) {
+      logs.value = appLogs.map(log => ({
+        ts: log.ts || Date.now(),
+        pkg: log.pkg || props.pkg,
+        proc: log.proc || props.pkg,
+        pid: log.pid || 0,
+        tid: log.tid || 0,
+        uid: log.uid || 0,
+        op: log.op || 'open',
+        path: log.path || '',
+        mapped: log.mapped || '',
+        decision: log.decision || 'PASS',
+        result: log.result || 'OK',
+        errno: log.errno || 0
+      }))
+    } else {
+      logs.value = []
+    }
+  } catch (e) {
+    console.error('Failed to load logs:', e)
+    logs.value = []
+  }
 }
 
 const showClearLogsModal = ref(false)
@@ -601,8 +639,18 @@ const clearLogs = () => {
 }
 
 const executeClearLogs = async () => {
-  if (await appStore.clearAppLogs(props.pkg)) {
-    logs.value = []
+  try {
+    const success = await appStore.clearAppLogs(props.pkg)
+    if (success) {
+      logs.value = []
+      console.log('Logs cleared successfully')
+    } else {
+      console.error('Failed to clear logs')
+      alert('清空日志失败')
+    }
+  } catch (e) {
+    console.error('Error clearing logs:', e)
+    alert('清空日志失败: ' + e.message)
   }
   showClearLogsModal.value = false
 }

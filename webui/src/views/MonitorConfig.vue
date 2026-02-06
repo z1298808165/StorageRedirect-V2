@@ -468,17 +468,19 @@ const saveMonitorPaths = async () => {
     operations: p.operations
   }))
 
+  // 创建新的配置对象
   const newConfig = {
-    ...config.value,
+    ...JSON.parse(JSON.stringify(config.value)),
     monitorPaths: pathsConfig
   }
-
-  // 更新本地 config
-  config.value = newConfig
 
   // 保存到 store
   const success = await appStore.saveGlobalConfig(newConfig)
   if (success) {
+    // 更新本地 config
+    config.value = newConfig
+    // 更新 store 中的全局配置
+    appStore.globalConfig = newConfig
     console.log('Monitor paths saved successfully')
   } else {
     console.error('Failed to save monitor paths')
@@ -490,6 +492,8 @@ const loadMonitorPaths = async () => {
   try {
     // 首先尝试从全局配置中加载
     await appStore.loadGlobalConfig()
+
+    // 从 store 中读取监控路径
     if (appStore.globalConfig && appStore.globalConfig.monitorPaths) {
       monitorPaths.value = appStore.globalConfig.monitorPaths.map((p, index) => ({
         id: p.id || Date.now() + index,
@@ -497,6 +501,7 @@ const loadMonitorPaths = async () => {
         desc: p.desc || '',
         operations: p.operations || ['open', 'write', 'delete']
       }))
+      console.log('Monitor paths loaded from store:', monitorPaths.value.length)
       return
     }
 
@@ -509,9 +514,16 @@ const loadMonitorPaths = async () => {
         desc: p.desc || '',
         operations: p.operations || ['open', 'write', 'delete']
       }))
+      console.log('Monitor paths loaded from daemon:', monitorPaths.value.length)
+      return
     }
+
+    // 如果都没有，初始化为空数组
+    monitorPaths.value = []
+    console.log('No monitor paths found, initialized empty')
   } catch (e) {
     console.error('Failed to load monitor paths:', e)
+    monitorPaths.value = []
   }
 }
 
