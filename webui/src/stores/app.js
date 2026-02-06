@@ -883,7 +883,9 @@ export const useAppStore = defineStore('app', () => {
     console.log('Daemon global set failed, trying direct file write:', result?.error)
     try {
       const config = await readConfigFile()
+      // 只更新 global 字段，保留 apps 等其他字段
       config.global = configToSave
+      console.log('saveGlobalConfig: saving config with apps count:', Object.keys(config.apps || {}).length)
       const success = await writeConfigFile(config)
       if (success) {
         globalConfig.value = configToSave

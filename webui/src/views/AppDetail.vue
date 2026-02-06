@@ -737,6 +737,12 @@ const saveConfig = async (fieldToUpdate = null) => {
       if (fieldToUpdate && configToSave[fieldToUpdate] !== undefined) {
         config.value[fieldToUpdate] = configToSave[fieldToUpdate]
       }
+      // 同时更新 store 中的配置，确保内存中的配置是最新的
+      if (!appStore.appConfigs[props.pkg]) {
+        appStore.appConfigs[props.pkg] = {}
+      }
+      Object.assign(appStore.appConfigs[props.pkg], configToSave)
+      console.log('saveConfig: updated appStore.appConfigs:', JSON.stringify(appStore.appConfigs[props.pkg]).substring(0, 200))
     } else {
       console.error('saveConfig: save failed')
       alert('保存失败')
