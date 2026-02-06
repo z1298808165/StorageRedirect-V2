@@ -694,49 +694,28 @@ const saveConfig = async (fieldToUpdate = null) => {
 
     console.log('saveConfig: after ensureConfigStructure - config.value:', JSON.stringify(config.value))
 
-    // 创建要保存的配置对象，只包含需要更新的字段
-    let configToSave = {}
+    // 总是保存完整的配置对象，防止后端配置丢失
+    // 确保所有字段都有默认值
+    const redirectRules = config.value.redirectRules || []
+    const readOnlyRules = config.value.readOnlyRules || []
+    const monitorPaths = config.value.monitorPaths || []
+
+    const configToSave = {
+      enabled: config.value.enabled === true,
+      redirectRules: JSON.parse(JSON.stringify(redirectRules)),
+      readOnlyRules: JSON.parse(JSON.stringify(readOnlyRules)),
+      monitorPaths: JSON.parse(JSON.stringify(monitorPaths))
+    }
 
     if (fieldToUpdate) {
-      // 只更新指定字段
-      const fieldValue = config.value[fieldToUpdate]
-      console.log('saveConfig: fieldToUpdate:', fieldToUpdate, 'fieldValue:', JSON.stringify(fieldValue))
-
-      // 确保字段值存在且可序列化
-      if (fieldValue !== undefined) {
-        // 对于 enabled 字段，确保保存为布尔值
-        if (fieldToUpdate === 'enabled') {
-          configToSave[fieldToUpdate] = fieldValue === true
-        } else {
-          configToSave[fieldToUpdate] = JSON.parse(JSON.stringify(fieldValue))
-        }
-      } else {
-        configToSave[fieldToUpdate] = fieldToUpdate === 'enabled' ? false : []
-      }
-      console.log('saveConfig: saving field:', fieldToUpdate, 'value:', JSON.stringify(configToSave[fieldToUpdate]))
+      console.log('saveConfig: fieldToUpdate:', fieldToUpdate, 'full config:', JSON.stringify(configToSave))
     } else {
-      // 更新所有字段（用于开关切换）
-      // 确保所有字段都有默认值
-      const redirectRules = config.value.redirectRules || []
-      const readOnlyRules = config.value.readOnlyRules || []
-      const monitorPaths = config.value.monitorPaths || []
-
-      configToSave = {
-        enabled: config.value.enabled === true,
-        redirectRules: JSON.parse(JSON.stringify(redirectRules)),
-        readOnlyRules: JSON.parse(JSON.stringify(readOnlyRules)),
-        monitorPaths: JSON.parse(JSON.stringify(monitorPaths))
-      }
       console.log('saveConfig: saving all config:', JSON.stringify(configToSave))
     }
 
     const success = await appStore.saveAppConfig(props.pkg, configToSave)
     if (success) {
       console.log('saveConfig: save successful')
-      // 保存成功，更新本地配置状态
-      if (fieldToUpdate && configToSave[fieldToUpdate] !== undefined) {
-        config.value[fieldToUpdate] = configToSave[fieldToUpdate]
-      }
       // 同时更新 store 中的配置，确保内存中的配置是最新的
       if (!appStore.appConfigs[props.pkg]) {
         appStore.appConfigs[props.pkg] = {}
