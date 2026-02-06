@@ -74,10 +74,10 @@ const ksuApi = {
   init: initKsuApi,
 
   // 检查 API 是否可用
-  isAvailable: () => {
+  isAvailable: async () => {
     // 实际调用 listPackages 来测试 API 是否真正可用
     try {
-      const testResult = listPackages('user')
+      const testResult = await listPackages('user')
       const available = Array.isArray(testResult)
       console.log('[ksuApi] isAvailable check:', { available, testResultType: typeof testResult, isArray: Array.isArray(testResult), resultLength: testResult?.length })
       return available
@@ -123,7 +123,7 @@ const ksuApi = {
     if (ksuApis.listPackages) {
       try {
         console.log('[ksuApi] listPackages called with type:', type)
-        const result = ksuApis.listPackages(type)
+        const result = await ksuApis.listPackages(type)
         console.log('[ksuApi] listPackages result:', result)
         console.log('[ksuApi] listPackages is array:', Array.isArray(result))
         
@@ -201,7 +201,7 @@ const ksuApi = {
     // 如果 getPackagesInfo API 可用，直接使用
     if (ksuApis.getPackagesInfo) {
       try {
-        const result = ksuApis.getPackagesInfo(packages)
+        const result = await ksuApis.getPackagesInfo(packages)
         console.log('[ksuApi] getPackagesInfo result:', result)
         console.log('[ksuApi] getPackagesInfo is array:', Array.isArray(result))
         
@@ -472,12 +472,12 @@ export const useAppStore = defineStore('app', () => {
       let allPackages = []
 
       // 根据类型获取应用包名列表
-      // 注意：listPackages 是同步函数
+      // 注意：listPackages 可能是异步函数，需要使用 await
       if (type === 'all' || type === 'user') {
         // 获取用户应用
         try {
           console.log('[store] Calling listPackages("user")...')
-          const userPackages = listPackages('user')
+          const userPackages = await listPackages('user')
           console.log('[store] User packages result:', userPackages)
           console.log('[store] User packages is array:', Array.isArray(userPackages))
 
@@ -494,7 +494,7 @@ export const useAppStore = defineStore('app', () => {
         // 获取系统应用
         try {
           console.log('[store] Calling listPackages("system")...')
-          const systemPackages = listPackages('system')
+          const systemPackages = await listPackages('system')
           console.log('[store] System packages result:', systemPackages)
           console.log('[store] System packages is array:', Array.isArray(systemPackages))
 
@@ -519,11 +519,11 @@ export const useAppStore = defineStore('app', () => {
         throw new Error('获取应用列表为空')
       }
 
-      // 注意：getPackagesInfo 是同步函数
+      // 注意：getPackagesInfo 可能是异步函数，需要使用 await
       console.log('[store] Calling getPackagesInfo...')
       let info
       try {
-        info = getPackagesInfo(allPackages)
+        info = await getPackagesInfo(allPackages)
       } catch (e) {
         console.error('[store] getPackagesInfo threw error:', e)
         console.error('[store] Error stack:', e.stack)
