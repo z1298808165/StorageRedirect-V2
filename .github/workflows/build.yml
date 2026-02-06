@@ -76,7 +76,11 @@ jobs:
         ls -la webui/ 2>/dev/null || echo "webui directory not found!"
         echo ""
         cd webui
+        # 清除缓存并安装最新依赖
+        rm -rf node_modules package-lock.json
         npm install
+        # 确保安装最新版本的 kernelsu
+        npm install kernelsu@latest
         npm run build
 
     - name: Setup NDK environment
