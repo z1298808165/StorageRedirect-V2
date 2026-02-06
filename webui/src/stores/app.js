@@ -11,61 +11,50 @@ let ksuApis = {
 let ksuModuleLoaded = false
 
 // 初始化 KernelSU API
-// 注意：在 KernelSU WebView 中，kernelsu API 是通过 window.kernelsu 注入的
+// 根据 KernelSU 文档，应该使用 import { exec } from 'kernelsu' 方式导入
 const initKsuApi = async () => {
   if (ksuModuleLoaded) return true
 
   try {
-    console.log('[store] Trying to initialize kernelsu API...')
-    console.log('[store] window.kernelsu:', typeof window.kernelsu)
-    console.log('[store] window.kernelsu object:', window.kernelsu)
+    console.log('[store] Trying to import kernelsu module...')
     
-    // 在 KernelSU WebView 环境中，API 直接通过 window.kernelsu 注入
-    if (!window.kernelsu) {
-      console.error('[store] window.kernelsu not found - not running in KernelSU WebView?')
-      return false
-    }
+    // 尝试导入 kernelsu npm 包
+    const ksuModule = await import('kernelsu')
+    console.log('[store] Imported kernelsu module:', ksuModule)
     
-    const ksuModule = window.kernelsu
-    console.log('[store] ksuModule:', ksuModule)
-    console.log('[store] typeof ksuModule:', typeof ksuModule)
-
-    // 获取模块的所有属性
+    // 获取模块的所有导出
     const keys = Object.keys(ksuModule)
     console.log('[store] ksuModule keys:', keys)
-    
-    // 打印所有属性的类型以便调试
-    keys.forEach(key => {
-      console.log(`[store] ksuModule.${key} type:`, typeof ksuModule[key])
-    })
 
-    // 直接从 window.kernelsu 获取 API 函数
-    if (ksuModule.listPackages) {
-      console.log('[store] Found listPackages in window.kernelsu')
-      ksuApis.listPackages = ksuModule.listPackages
+    // 从模块中获取 API 函数（支持命名导出和默认导出）
+    const exports = ksuModule.default || ksuModule
+    
+    if (exports.listPackages) {
+      console.log('[store] Found listPackages in kernelsu module')
+      ksuApis.listPackages = exports.listPackages
     } else {
-      console.error('[store] listPackages not found in window.kernelsu')
+      console.error('[store] listPackages not found in kernelsu module')
     }
     
-    if (ksuModule.getPackagesInfo) {
-      console.log('[store] Found getPackagesInfo in window.kernelsu')
-      ksuApis.getPackagesInfo = ksuModule.getPackagesInfo
+    if (exports.getPackagesInfo) {
+      console.log('[store] Found getPackagesInfo in kernelsu module')
+      ksuApis.getPackagesInfo = exports.getPackagesInfo
     } else {
-      console.error('[store] getPackagesInfo not found in window.kernelsu')
+      console.error('[store] getPackagesInfo not found in kernelsu module')
     }
     
-    if (ksuModule.exec) {
-      console.log('[store] Found exec in window.kernelsu')
-      ksuApis.exec = ksuModule.exec
+    if (exports.exec) {
+      console.log('[store] Found exec in kernelsu module')
+      ksuApis.exec = exports.exec
     } else {
-      console.error('[store] exec not found in window.kernelsu')
+      console.error('[store] exec not found in kernelsu module')
     }
     
-    if (ksuModule.toast) {
-      console.log('[store] Found toast in window.kernelsu')
-      ksuApis.toast = ksuModule.toast
+    if (exports.toast) {
+      console.log('[store] Found toast in kernelsu module')
+      ksuApis.toast = exports.toast
     } else {
-      console.warn('[store] toast not found in window.kernelsu')
+      console.warn('[store] toast not found in kernelsu module')
     }
 
     console.log('[store] listPackages:', typeof ksuApis.listPackages)
@@ -424,9 +413,16 @@ export const useAppStore = defineStore('app', () => {
     }
   }
 
-  // 检测是否在 KernelSU WebView 环境中
-  const isInKsuWebView = () => {
-    return typeof window.kernelsu !== 'undefined' && window.kernelsu !== null
+  // 检测 KernelSU API 是否可用
+  // 通过尝试初始化来判断是否在 KernelSU WebView 环境中
+  const checkKsuApiAvailable = async () => {
+    try {
+      const result = await initKsuApi()
+      return result
+    } catch (e) {
+      console.error('[store] KernelSU API check failed:', e)
+      return false
+    }
   }
 
   // 加载应用列表 - 参考示例实现，分别获取用户应用和系统应用
@@ -436,19 +432,18 @@ export const useAppStore = defineStore('app', () => {
 
     try {
       console.log('[store] Loading apps...')
-      console.log('[store] Checking if in KernelSU WebView...')
+      console.log('[store] Checking KernelSU API availability...')
       
-      // 首先检测是否在 KernelSU WebView 环境中
-      if (!isInKsuWebView()) {
-        console.warn('[store] Not running in KernelSU WebView, switching to demo mode')
+      // 首先检测 KernelSU API 是否可用
+      const apiAvailable = await checkKsuApiAvailable()
+      console.log('[store] KernelSU API available:', apiAvailable)
+      
+      if (!apiAvailable) {
+        console.warn('[store] KernelSU API not available, switching to demo mode')
         loadDemoData()
         return true
       }
 
-      // 首先初始化 KernelSU API
-      console.log('[store] Initializing KernelSU API...')
-      const initSuccess = await ksuApi.init()
-      console.log('[store] KernelSU API init result:', initSuccess)
       console.log('[store] ksuApi.isAvailable():', ksuApi.isAvailable())
 
       // 检查 KernelSU API 是否可用
@@ -843,15 +838,17 @@ export const useAppStore = defineStore('app', () => {
 
   // 检查 Daemon 状态
   const checkDaemon = async () => {
-    // 如果不在 KernelSU WebView 中，自动进入演示模式
-    if (!isInKsuWebView()) {
-      console.warn('[checkDaemon] Not in KernelSU WebView, switching to demo mode')
-      isDemoMode.value = true
+    // 如果已经在演示模式，直接返回
+    if (isDemoMode.value) {
       daemonStatus.value = { online: true, version: '1.0.0-demo' }
       return true
     }
     
-    if (isDemoMode.value) {
+    // 检查 KernelSU API 是否可用
+    const apiAvailable = await checkKsuApiAvailable()
+    if (!apiAvailable) {
+      console.warn('[checkDaemon] KernelSU API not available, switching to demo mode')
+      isDemoMode.value = true
       daemonStatus.value = { online: true, version: '1.0.0-demo' }
       return true
     }
