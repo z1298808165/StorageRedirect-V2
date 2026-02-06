@@ -276,6 +276,16 @@ export const useAppStore = defineStore('app', () => {
     })
   })
 
+  // Unicode 安全的 base64 编码
+  const utf8ToBase64 = (str) => {
+    const utf8Bytes = new TextEncoder().encode(str)
+    let binary = ''
+    for (let i = 0; i < utf8Bytes.length; i++) {
+      binary += String.fromCharCode(utf8Bytes[i])
+    }
+    return btoa(binary)
+  }
+
   // 调用 Daemon（通过 daemonctl 命令）
   const callDaemon = async (cmd, params = null) => {
     if (isDemoMode.value) {
@@ -301,10 +311,10 @@ export const useAppStore = defineStore('app', () => {
         command += ` app get --pkg "${params.pkg}"`
         break
       case 'app set':
-        // 使用 base64 编码避免 shell 转义问题
+        // 使用 base64 编码避免 shell 转义问题（支持 Unicode）
         {
           const jsonStr = JSON.stringify(params.app)
-          const base64Json = btoa(jsonStr)
+          const base64Json = utf8ToBase64(jsonStr)
           command += ` app set --pkg "${params.pkg}" --json-base64 "${base64Json}"`
         }
         break
@@ -315,10 +325,10 @@ export const useAppStore = defineStore('app', () => {
         command += ' global get'
         break
       case 'global set':
-        // 使用 base64 编码避免 shell 转义问题
+        // 使用 base64 编码避免 shell 转义问题（支持 Unicode）
         {
           const jsonStr = JSON.stringify(params.global)
-          const base64Json = btoa(jsonStr)
+          const base64Json = utf8ToBase64(jsonStr)
           command += ` global set --json-base64 "${base64Json}"`
         }
         break
@@ -554,8 +564,8 @@ export const useAppStore = defineStore('app', () => {
   const writeConfigFile = async (config) => {
     try {
       const configJson = JSON.stringify(config, null, 2)
-      // 使用 base64 编码避免 shell 转义问题
-      const base64Json = btoa(configJson)
+      // 使用 base64 编码避免 shell 转义问题（支持 Unicode）
+      const base64Json = utf8ToBase64(configJson)
       // 先创建配置目录，然后写入文件
       const configDir = CONFIG_PATH.substring(0, CONFIG_PATH.lastIndexOf('/'))
       const result = await ksuApi.exec(`mkdir -p ${configDir} && echo "${base64Json}" | base64 -d > ${CONFIG_PATH}`)
