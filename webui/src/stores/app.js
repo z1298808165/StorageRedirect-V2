@@ -13,12 +13,6 @@ let ksuModuleLoaded = true
 
 // 初始化 KernelSU API
 const initKsuApi = async () => {
-  console.log('[store] KernelSU APIs imported:', {
-    listPackages: typeof listPackages,
-    getPackagesInfo: typeof getPackagesInfo,
-    exec: typeof exec,
-    toast: typeof toast
-  })
   return true
 }
 
@@ -78,11 +72,8 @@ const ksuApi = {
     // 实际调用 listPackages 来测试 API 是否真正可用
     try {
       const testResult = await listPackages('user')
-      const available = Array.isArray(testResult)
-      console.log('[ksuApi] isAvailable check:', { available, testResultType: typeof testResult, isArray: Array.isArray(testResult), resultLength: testResult?.length })
-      return available
+      return Array.isArray(testResult)
     } catch (e) {
-      console.error('[ksuApi] isAvailable check failed:', e)
       return false
     }
   },
@@ -91,19 +82,15 @@ const ksuApi = {
   exec: async (command, options = {}) => {
     // 确保 API 已初始化
     if (!ksuModuleLoaded) {
-      console.log('[ksuApi] exec called but API not initialized, trying to init...')
       await initKsuApi()
     }
     
     if (!ksuApis.exec) {
-      console.warn('[ksuApi] exec API not available, command will not be executed:', command)
       // 返回模拟的失败结果，而不是抛出错误
       return { errno: -1, stdout: '', stderr: 'exec API not available' }
     }
     try {
-      console.log('[ksuApi] exec called:', command)
       const result = await ksuApis.exec(command, options)
-      console.log('[ksuApi] exec result:', result)
       return result
     } catch (e) {
       console.error('[ksuApi] exec error:', e)
@@ -115,25 +102,16 @@ const ksuApi = {
   listPackages: async (type = 'all') => {
     // 确保 API 已初始化
     if (!ksuModuleLoaded) {
-      console.log('[ksuApi] listPackages called but API not initialized, trying to init...')
       await initKsuApi()
     }
     
     // 如果 listPackages API 可用，直接使用
     if (ksuApis.listPackages) {
       try {
-        console.log('[ksuApi] listPackages called with type:', type)
         const result = await ksuApis.listPackages(type)
-        console.log('[ksuApi] listPackages result:', result)
-        console.log('[ksuApi] listPackages is array:', Array.isArray(result))
         
         // 确保返回数组
-        if (!result) {
-          console.warn('[ksuApi] listPackages returned null/undefined, returning empty array')
-          return []
-        }
-        if (!Array.isArray(result)) {
-          console.warn('[ksuApi] listPackages returned non-array:', typeof result, '- returning empty array')
+        if (!result || !Array.isArray(result)) {
           return []
         }
         return result
@@ -144,8 +122,6 @@ const ksuApi = {
     }
     
     // 如果 API 不可用，使用 pm 命令作为替代
-    console.log('[ksuApi] listPackages API not available, using pm command fallback')
-    
     if (!ksuApis.exec) {
       throw new Error('Neither listPackages API nor exec API is available')
     }
@@ -160,11 +136,9 @@ const ksuApi = {
         cmd = 'pm list packages'
       }
       
-      console.log('[ksuApi] Executing fallback command:', cmd)
       const { errno, stdout, stderr } = await ksuApis.exec(cmd)
       
       if (errno !== 0) {
-        console.error('[ksuApi] pm command failed:', stderr)
         throw new Error(`pm command failed: ${stderr}`)
       }
       
@@ -175,7 +149,6 @@ const ksuApi = {
         .filter(line => line.startsWith('package:'))
         .map(line => line.replace('package:', ''))
       
-      console.log('[ksuApi] Fallback packages count:', packages.length)
       return packages
     } catch (e) {
       console.error('[ksuApi] Fallback listPackages error:', e)
@@ -187,31 +160,20 @@ const ksuApi = {
   getPackagesInfo: async (packages) => {
     // 确保 API 已初始化
     if (!ksuModuleLoaded) {
-      console.log('[ksuApi] getPackagesInfo called but API not initialized, trying to init...')
       await initKsuApi()
     }
     
     if (!Array.isArray(packages)) {
-      console.error('[ksuApi] packages is not an array!')
       return []
     }
-    
-    console.log('[ksuApi] getPackagesInfo called for', packages.length, 'packages')
     
     // 如果 getPackagesInfo API 可用，直接使用
     if (ksuApis.getPackagesInfo) {
       try {
         const result = await ksuApis.getPackagesInfo(packages)
-        console.log('[ksuApi] getPackagesInfo result:', result)
-        console.log('[ksuApi] getPackagesInfo is array:', Array.isArray(result))
         
         // 确保返回数组
-        if (!result) {
-          console.warn('[ksuApi] getPackagesInfo returned null/undefined, returning empty array')
-          return []
-        }
-        if (!Array.isArray(result)) {
-          console.warn('[ksuApi] getPackagesInfo returned non-array:', typeof result, '- returning empty array')
+        if (!result || !Array.isArray(result)) {
           return []
         }
         return result
@@ -222,8 +184,6 @@ const ksuApi = {
     }
     
     // 如果 API 不可用，使用 pm 命令作为替代
-    console.log('[ksuApi] getPackagesInfo API not available, using pm command fallback')
-    
     if (!ksuApis.exec) {
       throw new Error('Neither getPackagesInfo API nor exec API is available')
     }
@@ -263,7 +223,6 @@ const ksuApi = {
         }
       }
       
-      console.log('[ksuApi] Fallback getPackagesInfo count:', results.length)
       return results
     } catch (e) {
       console.error('[ksuApi] Fallback getPackagesInfo error:', e)
@@ -342,7 +301,12 @@ export const useAppStore = defineStore('app', () => {
         command += ` app get --pkg "${params.pkg}"`
         break
       case 'app set':
-        command += ` app set --pkg "${params.pkg}" --json '${JSON.stringify(params.json)}'`
+        // 使用 base64 编码避免 shell 转义问题
+        {
+          const jsonStr = JSON.stringify(params.json)
+          const base64Json = btoa(jsonStr)
+          command += ` app set --pkg "${params.pkg}" --json-base64 "${base64Json}"`
+        }
         break
       case 'app delete':
         command += ` app delete --pkg "${params.pkg}"`
@@ -351,7 +315,12 @@ export const useAppStore = defineStore('app', () => {
         command += ' global get'
         break
       case 'global set':
-        command += ` global set '${JSON.stringify(params.json)}'`
+        // 使用 base64 编码避免 shell 转义问题
+        {
+          const jsonStr = JSON.stringify(params.json)
+          const base64Json = btoa(jsonStr)
+          command += ` global set --json-base64 "${base64Json}"`
+        }
         break
       case 'log tail':
         command += ` log tail --pkg "${params.pkg}" --n ${params.n || 20}`
@@ -466,103 +435,63 @@ export const useAppStore = defineStore('app', () => {
     loadError.value = null
 
     try {
-      console.log('[store] Loading apps...')
-      console.log('[store] Using kernelsu API directly...')
-
       let allPackages = []
 
       // 根据类型获取应用包名列表
-      // 注意：listPackages 可能是异步函数，需要使用 await
       if (type === 'all' || type === 'user') {
         // 获取用户应用
         try {
-          console.log('[store] Calling listPackages("user")...')
           const userPackages = await listPackages('user')
-          console.log('[store] User packages result:', userPackages)
-          console.log('[store] User packages is array:', Array.isArray(userPackages))
-
           if (Array.isArray(userPackages) && userPackages.length > 0) {
             allPackages = allPackages.concat(userPackages)
           }
         } catch (e) {
           console.error('[store] Failed to load user packages:', e)
-          console.error('[store] Error stack:', e.stack)
         }
       }
 
       if (type === 'all' || type === 'system') {
         // 获取系统应用
         try {
-          console.log('[store] Calling listPackages("system")...')
           const systemPackages = await listPackages('system')
-          console.log('[store] System packages result:', systemPackages)
-          console.log('[store] System packages is array:', Array.isArray(systemPackages))
-
           if (Array.isArray(systemPackages) && systemPackages.length > 0) {
             allPackages = allPackages.concat(systemPackages)
           }
         } catch (e) {
           console.error('[store] Failed to load system packages:', e)
-          console.error('[store] Error stack:', e.stack)
         }
       }
 
-      // 去重 - 确保 allPackages 是数组
-      if (!Array.isArray(allPackages)) {
-        console.error('[store] allPackages is not an array:', allPackages)
-        allPackages = []
-      }
+      // 去重
       allPackages = [...new Set(allPackages)]
-      console.log('[store] Total unique packages:', allPackages.length)
 
       if (allPackages.length === 0) {
         throw new Error('获取应用列表为空')
       }
 
-      // 注意：getPackagesInfo 可能是异步函数，需要使用 await
-      console.log('[store] Calling getPackagesInfo...')
-      let info
-      try {
-        info = await getPackagesInfo(allPackages)
-      } catch (e) {
-        console.error('[store] getPackagesInfo threw error:', e)
-        console.error('[store] Error stack:', e.stack)
-        throw e
-      }
-      console.log('[store] Info result:', info)
-      console.log('[store] Info is array:', Array.isArray(info))
+      // 获取应用详细信息
+      const info = await getPackagesInfo(allPackages)
 
       if (!Array.isArray(info)) {
-        console.error('[store] getPackagesInfo returned non-array:', info)
         throw new Error('获取应用信息返回的不是数组')
       }
 
-      console.log('[store] Info count:', info.length)
-
       // 过滤掉无效的应用数据
-      try {
-        apps.value = info
-          .filter(p => p && typeof p === 'object' && p.packageName)
-          .map(p => ({
-            packageName: p.packageName,
-            appLabel: p.appLabel || p.packageName,
-            versionName: p.versionName || '',
-            versionCode: p.versionCode || 0,
-            isSystem: p.isSystem || false,
-            uid: p.uid || 0,
-            userId: p.userId || 0
-          }))
-      } catch (e) {
-        console.error('[store] Error processing app info:', e)
-        console.error('[store] Error stack:', e.stack)
-        throw e
-      }
+      apps.value = info
+        .filter(p => p && typeof p === 'object' && p.packageName)
+        .map(p => ({
+          packageName: p.packageName,
+          appLabel: p.appLabel || p.packageName,
+          versionName: p.versionName || '',
+          versionCode: p.versionCode || 0,
+          isSystem: p.isSystem || false,
+          uid: p.uid || 0,
+          userId: p.userId || 0
+        }))
 
-      console.log('[store] Loaded apps:', apps.value.length)
       return true
     } catch (e) {
       console.error('[store] Failed to load apps:', e)
-      console.error('[store] Error stack:', e.stack)
       loadError.value = e.message || '未知错误'
       return false
     } finally {
@@ -916,26 +845,31 @@ export const useAppStore = defineStore('app', () => {
       return true
     }
     
-    // 检查 KernelSU API 是否可用
-    const apiAvailable = await checkKsuApiAvailable()
-    if (!apiAvailable) {
-      console.warn('[checkDaemon] KernelSU API not available, switching to demo mode')
-      isDemoMode.value = true
-      daemonStatus.value = { online: true, version: '1.0.0-demo' }
-      return true
-    }
-    
     try {
+      // 直接尝试 ping daemon，如果成功说明在真实环境
       const result = await callDaemon('ping')
-      daemonStatus.value = {
-        online: result && result.ok,
-        version: result?.version || ''
+      if (result && result.ok) {
+        daemonStatus.value = {
+          online: true,
+          version: result?.version || ''
+        }
+        // 确保退出演示模式
+        isDemoMode.value = false
+        return true
       }
-      return result && result.ok
     } catch (e) {
+      // ping 失败，检查是否是因为 API 不可用
+      const apiAvailable = await checkKsuApiAvailable()
+      if (!apiAvailable) {
+        // API 不可用，切换到演示模式
+        isDemoMode.value = true
+        daemonStatus.value = { online: true, version: '1.0.0-demo' }
+        return true
+      }
+      // API 可用但 daemon 不可用
       daemonStatus.value = { online: false, version: '' }
-      return false
     }
+    return false
   }
 
   // 获取应用图标 URL

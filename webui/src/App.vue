@@ -49,8 +49,8 @@ let checkInterval
 
 const checkDaemon = async () => {
   try {
-    const result = await appStore.callDaemon('ping')
-    daemonOnline.value = result && result.ok
+    const result = await appStore.checkDaemon()
+    daemonOnline.value = result
   } catch (e) {
     daemonOnline.value = false
   }
@@ -58,7 +58,8 @@ const checkDaemon = async () => {
 
 onMounted(() => {
   checkDaemon()
-  checkInterval = setInterval(checkDaemon, 5000)
+  // 减少检查频率到 30 秒，减少控制台输出
+  checkInterval = setInterval(checkDaemon, 30000)
 })
 
 onUnmounted(() => {
