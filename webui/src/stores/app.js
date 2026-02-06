@@ -11,63 +11,58 @@ let ksuApis = {
 let ksuModuleLoaded = false
 
 // 初始化 KernelSU API
-// 根据 KernelSU 文档，使用 import { exec } from 'kernelsu' 方式导入
-// 注意：listPackages 和 getPackagesInfo 可能通过全局 ksu 对象提供
+// KernelSU WebView 通过全局 ksu 对象注入所有 API
 const initKsuApi = async () => {
   if (ksuModuleLoaded) return true
 
   try {
-    console.log('[store] Trying to import kernelsu module...')
+    console.log('[store] Checking global ksu object...')
+    console.log('[store] typeof ksu:', typeof ksu)
     
-    // 尝试导入 kernelsu npm 包（提供 exec, spawn, fullScreen, toast）
-    const ksuModule = await import('kernelsu')
-    console.log('[store] Imported kernelsu module:', ksuModule)
-    
-    // 获取模块的所有导出
-    const keys = Object.keys(ksuModule)
-    console.log('[store] ksuModule keys:', keys)
-
-    // 从模块中获取 API 函数（支持命名导出和默认导出）
-    const exports = ksuModule.default || ksuModule
-    
-    // 从 npm 包获取 exec 和 toast
-    if (exports.exec) {
-      console.log('[store] Found exec in kernelsu module')
-      ksuApis.exec = exports.exec
-    } else {
-      console.error('[store] exec not found in kernelsu module')
-    }
-    
-    if (exports.toast) {
-      console.log('[store] Found toast in kernelsu module')
-      ksuApis.toast = exports.toast
-    } else {
-      console.warn('[store] toast not found in kernelsu module')
-    }
-
     // 检查全局 ksu 对象（KernelSU WebView 注入）
-    console.log('[store] Checking global ksu object:', typeof ksu)
-    if (typeof ksu !== 'undefined' && ksu) {
-      console.log('[store] Found global ksu object')
-      const ksuKeys = Object.keys(ksu)
-      console.log('[store] ksu object keys:', ksuKeys)
-      
-      // 从全局 ksu 对象获取 listPackages 和 getPackagesInfo
-      if (ksu.listPackages) {
-        console.log('[store] Found listPackages in global ksu')
-        ksuApis.listPackages = ksu.listPackages
-      } else {
-        console.error('[store] listPackages not found in global ksu')
-      }
-      
-      if (ksu.getPackagesInfo) {
-        console.log('[store] Found getPackagesInfo in global ksu')
-        ksuApis.getPackagesInfo = ksu.getPackagesInfo
-      } else {
-        console.error('[store] getPackagesInfo not found in global ksu')
-      }
+    if (typeof ksu === 'undefined' || !ksu) {
+      console.error('[store] Global ksu object not found - not running in KernelSU WebView?')
+      return false
+    }
+    
+    console.log('[store] Found global ksu object:', ksu)
+    
+    // 获取 ksu 对象的所有属性
+    const ksuKeys = Object.keys(ksu)
+    console.log('[store] ksu object keys:', ksuKeys)
+    
+    // 打印所有属性的类型
+    ksuKeys.forEach(key => {
+      console.log(`[store] ksu.${key} type:`, typeof ksu[key])
+    })
+    
+    // 从全局 ksu 对象获取所有 API
+    if (ksu.exec) {
+      console.log('[store] Found exec in global ksu')
+      ksuApis.exec = ksu.exec
     } else {
-      console.warn('[store] Global ksu object not found')
+      console.error('[store] exec not found in global ksu')
+    }
+    
+    if (ksu.listPackages) {
+      console.log('[store] Found listPackages in global ksu')
+      ksuApis.listPackages = ksu.listPackages
+    } else {
+      console.error('[store] listPackages not found in global ksu')
+    }
+    
+    if (ksu.getPackagesInfo) {
+      console.log('[store] Found getPackagesInfo in global ksu')
+      ksuApis.getPackagesInfo = ksu.getPackagesInfo
+    } else {
+      console.error('[store] getPackagesInfo not found in global ksu')
+    }
+    
+    if (ksu.toast) {
+      console.log('[store] Found toast in global ksu')
+      ksuApis.toast = ksu.toast
+    } else {
+      console.warn('[store] toast not found in global ksu')
     }
 
     console.log('[store] listPackages:', typeof ksuApis.listPackages)
