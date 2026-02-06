@@ -164,15 +164,16 @@ const ksuApi = {
   },
 
   // 获取应用列表 - 使用导入的 listPackages 函数
-  listPackages: (type = 'all') => {
+  listPackages: async (type = 'all') => {
     if (!ksuApis.listPackages) {
       throw new Error('listPackages API not available')
     }
     try {
       console.log('[ksuApi] listPackages called with type:', type)
-      const result = ksuApis.listPackages(type)
+      const result = await ksuApis.listPackages(type)
       console.log('[ksuApi] listPackages result:', result)
       console.log('[ksuApi] listPackages is array:', Array.isArray(result))
+      console.log('[ksuApi] listPackages is promise:', result instanceof Promise)
       
       // 确保返回数组
       if (!result) {
@@ -191,7 +192,7 @@ const ksuApi = {
   },
 
   // 获取应用信息 - 使用导入的 getPackagesInfo 函数
-  getPackagesInfo: (packages) => {
+  getPackagesInfo: async (packages) => {
     if (!ksuApis.getPackagesInfo) {
       throw new Error('getPackagesInfo API not available')
     }
@@ -207,9 +208,10 @@ const ksuApi = {
 
       console.log('[ksuApi] packages count:', packages.length)
 
-      const result = ksuApis.getPackagesInfo(packages)
+      const result = await ksuApis.getPackagesInfo(packages)
       console.log('[ksuApi] getPackagesInfo result:', result)
       console.log('[ksuApi] getPackagesInfo is array:', Array.isArray(result))
+      console.log('[ksuApi] getPackagesInfo is promise:', result instanceof Promise)
       
       // 确保返回数组
       if (!result) {
@@ -425,12 +427,12 @@ export const useAppStore = defineStore('app', () => {
       let allPackages = []
 
       // 根据类型获取应用包名列表 - 参考示例代码实现
-      // 注意：官方 API 直接返回数组，不是 JSON 字符串！
+      // 注意：官方 API 是异步的，需要使用 await！
       if (type === 'all' || type === 'user') {
         // 获取用户应用
         try {
           console.log('[store] Calling ksuApi.listPackages("user")...')
-          const userPackages = ksuApi.listPackages('user')
+          const userPackages = await ksuApi.listPackages('user')
           console.log('[store] User packages result:', userPackages)
           console.log('[store] User packages is array:', Array.isArray(userPackages))
 
@@ -446,7 +448,7 @@ export const useAppStore = defineStore('app', () => {
         // 获取系统应用
         try {
           console.log('[store] Calling ksuApi.listPackages("system")...')
-          const systemPackages = ksuApi.listPackages('system')
+          const systemPackages = await ksuApi.listPackages('system')
           console.log('[store] System packages result:', systemPackages)
           console.log('[store] System packages is array:', Array.isArray(systemPackages))
 
@@ -470,9 +472,9 @@ export const useAppStore = defineStore('app', () => {
         throw new Error('获取应用列表为空')
       }
 
-      // getPackagesInfo 直接传入数组，返回的也是数组（不是 JSON 字符串！）
+      // getPackagesInfo 是异步 API，需要使用 await
       console.log('[store] Calling ksuApi.getPackagesInfo...')
-      const info = ksuApi.getPackagesInfo(allPackages)
+      const info = await ksuApi.getPackagesInfo(allPackages)
       console.log('[store] Info result:', info)
       console.log('[store] Info is array:', Array.isArray(info))
 
