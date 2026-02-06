@@ -170,8 +170,9 @@ const tabs = [
 const filteredApps = computed(() => {
   let result = []
 
-  // 从所有应用开始筛选 - 确保 apps.value 是数组
-  const appsList = appStore.apps.value || []
+  // 从所有应用开始筛选 - 确保 apps 是数组
+  // 注意：在 computed 中需要 .value 来访问 ref 的值
+  const appsList = appStore.apps?.value || []
   result = [...appsList]
 
   // 先按用户/系统筛选
@@ -182,7 +183,7 @@ const filteredApps = computed(() => {
   } else if (currentTab.value === 'configured') {
     // 已配置标签：只显示有规则的应用
     result = result.filter(app => {
-      const config = appStore.appConfigs[app.packageName]
+      const config = appStore.appConfigs?.value?.[app.packageName]
       return config && (config.enabled ||
         (config.redirectRules?.length > 0) ||
         (config.readOnlyRules?.length > 0))
@@ -208,7 +209,7 @@ const filteredAppsWithRules = computed(() => {
     return filteredApps.value
   }
   return filteredApps.value.filter(app => {
-    const config = appStore.appConfigs[app.packageName]
+    const config = appStore.appConfigs?.value?.[app.packageName]
     return config && (config.enabled ||
       (config.redirectRules?.length > 0) ||
       (config.readOnlyRules?.length > 0))
@@ -219,7 +220,7 @@ const filteredAppsWithoutRules = computed(() => {
   if (currentTab.value === 'configured') return []
   // 从已过滤的应用列表中筛选出无规则的应用
   return filteredApps.value.filter(app => {
-    const config = appStore.appConfigs[app.packageName]
+    const config = appStore.appConfigs?.value?.[app.packageName]
     return !config || (!config.enabled &&
       (!config.redirectRules || config.redirectRules.length === 0) &&
       (!config.readOnlyRules || config.readOnlyRules.length === 0))
@@ -231,7 +232,7 @@ const getAppIconUrl = (pkg) => {
 }
 
 const getRuleCount = (app) => {
-  const config = appStore.appConfigs[app.packageName]
+  const config = appStore.appConfigs?.value?.[app.packageName]
   if (!config) return { redirect: 0, readOnly: 0 }
   return {
     redirect: config.redirectRules?.length || 0,
@@ -240,14 +241,14 @@ const getRuleCount = (app) => {
 }
 
 const isEnabled = (app) => {
-  const config = appStore.appConfigs[app.packageName]
+  const config = appStore.appConfigs?.value?.[app.packageName]
   return config?.enabled || false
 }
 
 // 获取应用状态样式类
 // running: 运行中(绿色), stopped: 未运行(灰色), error: 挂载失败(红色)
 const getAppStatusClass = (app) => {
-  const config = appStore.appConfigs[app.packageName]
+  const config = appStore.appConfigs?.value?.[app.packageName]
   if (!config || !config.enabled) {
     return 'stopped'
   }
