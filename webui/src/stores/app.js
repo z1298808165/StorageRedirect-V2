@@ -564,16 +564,24 @@ export const useAppStore = defineStore('app', () => {
   const writeConfigFile = async (config) => {
     try {
       const configJson = JSON.stringify(config, null, 2)
+      console.log('writeConfigFile: configJson length:', configJson.length)
       // 使用 base64 编码避免 shell 转义问题（支持 Unicode）
       const base64Json = utf8ToBase64(configJson)
+      console.log('writeConfigFile: base64Json length:', base64Json.length)
       // 先创建配置目录，然后写入文件
       const configDir = CONFIG_PATH.substring(0, CONFIG_PATH.lastIndexOf('/'))
-      const result = await ksuApi.exec(`mkdir -p ${configDir} && echo "${base64Json}" | base64 -d > ${CONFIG_PATH}`)
+      const cmd = `mkdir -p ${configDir} && echo "${base64Json}" | base64 -d > ${CONFIG_PATH}`
+      console.log('writeConfigFile: executing command, configDir:', configDir)
+      const result = await ksuApi.exec(cmd)
+      console.log('writeConfigFile: exec result:', JSON.stringify(result))
       if (result && result.errno === 0) {
+        console.log('writeConfigFile: success')
         return true
+      } else {
+        console.error('writeConfigFile: failed, errno:', result?.errno, 'stderr:', result?.stderr)
       }
     } catch (e) {
-      console.error('Failed to write config file:', e)
+      console.error('writeConfigFile: exception:', e)
     }
     return false
   }
@@ -681,14 +689,15 @@ export const useAppStore = defineStore('app', () => {
       pkg,
       app: configToSave
     })
-    if (result && result.ok) {
+    console.log('Daemon app set result:', JSON.stringify(result))
+    if (result && result.ok === true) {
       appConfigs.value[pkg] = configToSave
       ksuApi.toast('保存成功')
       return true
     }
 
     // daemon 保存失败，使用备用方案：直接写入配置文件
-    console.log('Daemon app set failed, trying direct file write:', result?.error)
+    console.log('Daemon app set failed, trying direct file write. Result:', result)
     try {
       const config = await readConfigFile()
       if (!config.apps) {
