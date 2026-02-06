@@ -71,9 +71,14 @@ const initKsuApi = async () => {
     console.log('[store] toast:', typeof ksuApis.toast)
 
     // 检查关键 API 是否可用
-    if (!ksuApis.listPackages || !ksuApis.getPackagesInfo) {
-      console.error('[store] Required APIs not available')
+    // 注意：如果 listPackages/getPackagesInfo 不可用，可以使用 exec 命令作为替代
+    if (!ksuApis.exec) {
+      console.error('[store] exec API not available - cannot use fallback')
       return false
+    }
+    
+    if (!ksuApis.listPackages || !ksuApis.getPackagesInfo) {
+      console.warn('[store] listPackages/getPackagesInfo not available, will use exec fallback')
     }
 
     ksuModuleLoaded = true
@@ -168,8 +173,7 @@ const ksuApi = {
     }
   },
 
-  // 获取应用列表 - 使用导入的 listPackages 函数
-  // 注意：根据 KernelSU 文档，listPackages 是同步函数
+  // 获取应用列表 - 使用 listPackages API 或 pm 命令作为替代
   listPackages: async (type = 'all') => {
     // 确保 API 已初始化
     if (!ksuModuleLoaded) {
@@ -177,33 +181,71 @@ const ksuApi = {
       await initKsuApi()
     }
     
-    if (!ksuApis.listPackages) {
-      throw new Error('listPackages API not available')
+    // 如果 listPackages API 可用，直接使用
+    if (ksuApis.listPackages) {
+      try {
+        console.log('[ksuApi] listPackages called with type:', type)
+        const result = ksuApis.listPackages(type)
+        console.log('[ksuApi] listPackages result:', result)
+        console.log('[ksuApi] listPackages is array:', Array.isArray(result))
+        
+        // 确保返回数组
+        if (!result) {
+          console.warn('[ksuApi] listPackages returned null/undefined, returning empty array')
+          return []
+        }
+        if (!Array.isArray(result)) {
+          console.warn('[ksuApi] listPackages returned non-array:', typeof result, '- returning empty array')
+          return []
+        }
+        return result
+      } catch (e) {
+        console.error('[ksuApi] listPackages error:', e)
+        throw e
+      }
     }
+    
+    // 如果 API 不可用，使用 pm 命令作为替代
+    console.log('[ksuApi] listPackages API not available, using pm command fallback')
+    
+    if (!ksuApis.exec) {
+      throw new Error('Neither listPackages API nor exec API is available')
+    }
+    
     try {
-      console.log('[ksuApi] listPackages called with type:', type)
-      const result = ksuApis.listPackages(type)
-      console.log('[ksuApi] listPackages result:', result)
-      console.log('[ksuApi] listPackages is array:', Array.isArray(result))
+      let cmd = ''
+      if (type === 'user') {
+        cmd = 'pm list packages -3'
+      } else if (type === 'system') {
+        cmd = 'pm list packages -s'
+      } else {
+        cmd = 'pm list packages'
+      }
       
-      // 确保返回数组
-      if (!result) {
-        console.warn('[ksuApi] listPackages returned null/undefined, returning empty array')
-        return []
+      console.log('[ksuApi] Executing fallback command:', cmd)
+      const { errno, stdout, stderr } = await ksuApis.exec(cmd)
+      
+      if (errno !== 0) {
+        console.error('[ksuApi] pm command failed:', stderr)
+        throw new Error(`pm command failed: ${stderr}`)
       }
-      if (!Array.isArray(result)) {
-        console.warn('[ksuApi] listPackages returned non-array:', typeof result, '- returning empty array')
-        return []
-      }
-      return result
+      
+      // 解析输出，提取包名
+      const packages = stdout
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line.startsWith('package:'))
+        .map(line => line.replace('package:', ''))
+      
+      console.log('[ksuApi] Fallback packages count:', packages.length)
+      return packages
     } catch (e) {
-      console.error('[ksuApi] listPackages error:', e)
+      console.error('[ksuApi] Fallback listPackages error:', e)
       throw e
     }
   },
 
-  // 获取应用信息 - 使用导入的 getPackagesInfo 函数
-  // 注意：根据 KernelSU 文档，getPackagesInfo 是同步函数
+  // 获取应用信息 - 使用 getPackagesInfo API 或 pm 命令作为替代
   getPackagesInfo: async (packages) => {
     // 确保 API 已初始化
     if (!ksuModuleLoaded) {
@@ -211,37 +253,82 @@ const ksuApi = {
       await initKsuApi()
     }
     
-    if (!ksuApis.getPackagesInfo) {
-      throw new Error('getPackagesInfo API not available')
+    if (!Array.isArray(packages)) {
+      console.error('[ksuApi] packages is not an array!')
+      return []
     }
+    
+    console.log('[ksuApi] getPackagesInfo called for', packages.length, 'packages')
+    
+    // 如果 getPackagesInfo API 可用，直接使用
+    if (ksuApis.getPackagesInfo) {
+      try {
+        const result = ksuApis.getPackagesInfo(packages)
+        console.log('[ksuApi] getPackagesInfo result:', result)
+        console.log('[ksuApi] getPackagesInfo is array:', Array.isArray(result))
+        
+        // 确保返回数组
+        if (!result) {
+          console.warn('[ksuApi] getPackagesInfo returned null/undefined, returning empty array')
+          return []
+        }
+        if (!Array.isArray(result)) {
+          console.warn('[ksuApi] getPackagesInfo returned non-array:', typeof result, '- returning empty array')
+          return []
+        }
+        return result
+      } catch (e) {
+        console.error('[ksuApi] getPackagesInfo error:', e)
+        throw e
+      }
+    }
+    
+    // 如果 API 不可用，使用 pm 命令作为替代
+    console.log('[ksuApi] getPackagesInfo API not available, using pm command fallback')
+    
+    if (!ksuApis.exec) {
+      throw new Error('Neither getPackagesInfo API nor exec API is available')
+    }
+    
     try {
-      console.log('[ksuApi] getPackagesInfo called')
-      console.log('[ksuApi] packages param:', packages)
-      console.log('[ksuApi] packages is array:', Array.isArray(packages))
-
-      if (!Array.isArray(packages)) {
-        console.error('[ksuApi] packages is not an array!')
-        return []
-      }
-
-      console.log('[ksuApi] packages count:', packages.length)
-
-      const result = ksuApis.getPackagesInfo(packages)
-      console.log('[ksuApi] getPackagesInfo result:', result)
-      console.log('[ksuApi] getPackagesInfo is array:', Array.isArray(result))
+      // 为每个包名获取基本信息
+      const results = []
       
-      // 确保返回数组
-      if (!result) {
-        console.warn('[ksuApi] getPackagesInfo returned null/undefined, returning empty array')
-        return []
+      for (const pkg of packages) {
+        try {
+          // 使用 pm dump 获取应用信息
+          const { errno, stdout } = await ksuApis.exec(`pm dump ${pkg} | grep -E "(Package|versionName|versionCode|ApplicationLabel)" | head -20`)
+          
+          if (errno === 0 && stdout) {
+            // 解析基本信息
+            const info = {
+              packageName: pkg,
+              appLabel: pkg, // 默认使用包名
+              versionName: '',
+              versionCode: 0,
+              isSystem: false,
+              uid: 0,
+              userId: 0
+            }
+            
+            // 尝试从输出中提取信息
+            const versionMatch = stdout.match(/versionName=([^\s]+)/)
+            if (versionMatch) info.versionName = versionMatch[1]
+            
+            const codeMatch = stdout.match(/versionCode=(\d+)/)
+            if (codeMatch) info.versionCode = parseInt(codeMatch[1])
+            
+            results.push(info)
+          }
+        } catch (e) {
+          console.warn(`[ksuApi] Failed to get info for ${pkg}:`, e)
+        }
       }
-      if (!Array.isArray(result)) {
-        console.warn('[ksuApi] getPackagesInfo returned non-array:', typeof result, '- returning empty array')
-        return []
-      }
-      return result
+      
+      console.log('[ksuApi] Fallback getPackagesInfo count:', results.length)
+      return results
     } catch (e) {
-      console.error('[ksuApi] getPackagesInfo error:', e)
+      console.error('[ksuApi] Fallback getPackagesInfo error:', e)
       throw e
     }
   },
