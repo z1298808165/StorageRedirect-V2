@@ -547,7 +547,9 @@ export const useAppStore = defineStore('app', () => {
   const writeConfigFile = async (config) => {
     try {
       const configJson = JSON.stringify(config, null, 2)
-      const result = await ksuApi.exec(`echo '${configJson.replace(/'/g, "'\\''")}' > ${CONFIG_PATH}`)
+      // 使用 base64 编码避免 shell 转义问题
+      const base64Json = btoa(configJson)
+      const result = await ksuApi.exec(`echo "${base64Json}" | base64 -d > ${CONFIG_PATH}`)
       if (result && result.errno === 0) {
         return true
       }
@@ -752,34 +754,33 @@ export const useAppStore = defineStore('app', () => {
       console.log('Daemon log tail failed, trying direct file read:', e)
     }
 
-    // 备用方案：直接读取日志文件
+    // 备用方案：直接读取日志文件（.jsonl 格式）
     try {
-      const logFile = `${LOG_DIR}/${pkg}.log`
-      const result = await ksuApi.exec(`cat ${logFile} 2>/dev/null || echo '[]'`)
+      // 日志存储在 logs/<pkg>/<date>.jsonl 文件中
+      const appLogDir = `${LOG_DIR}/${pkg}`
+      const result = await ksuApi.exec(`ls -1 ${appLogDir}/*.jsonl 2>/dev/null | head -5`)
       if (result && result.stdout) {
-        try {
-          const logs = JSON.parse(result.stdout)
-          if (Array.isArray(logs)) {
-            return logs.slice(-n)
+        const logFiles = result.stdout.trim().split('\n').filter(f => f)
+        if (logFiles.length > 0) {
+          // 读取最新的日志文件
+          const latestLogFile = logFiles[logFiles.length - 1]
+          const catResult = await ksuApi.exec(`cat "${latestLogFile}" 2>/dev/null`)
+          if (catResult && catResult.stdout) {
+            // 解析 .jsonl 格式（每行一个 JSON 对象）
+            const lines = catResult.stdout.trim().split('\n').filter(line => line)
+            const entries = []
+            for (const line of lines) {
+              try {
+                const entry = JSON.parse(line)
+                entries.push(entry)
+              } catch (e) {
+                // 跳过损坏的行
+              }
+            }
+            // 按时间排序并返回最新的 n 条
+            entries.sort((a, b) => (b.ts || 0) - (a.ts || 0))
+            return entries.slice(0, n)
           }
-        } catch (parseError) {
-          console.error('Failed to parse logs JSON:', parseError)
-          // 如果不是 JSON 格式，尝试按行解析
-          const lines = result.stdout.trim().split('\n').filter(line => line)
-          return lines.slice(-n).map((line, index) => ({
-            ts: Date.now() - (lines.length - index) * 1000,
-            pkg: pkg,
-            proc: pkg,
-            pid: 0,
-            tid: 0,
-            uid: 0,
-            op: 'unknown',
-            path: line,
-            mapped: '',
-            decision: 'PASS',
-            result: 'OK',
-            errno: 0
-          }))
         }
       }
     } catch (e) {
