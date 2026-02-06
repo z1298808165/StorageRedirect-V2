@@ -27,7 +27,7 @@
     </div>
 
     <!-- 可视区域检测容器 -->
-    <div ref="scrollContainer" class="scroll-container">
+    <div ref="scrollContainer" class="scroll-container" @scroll="handleScroll">
 
     <!-- 加载状态 -->
     <div v-if="appStore.loading" class="loading">
@@ -73,7 +73,7 @@
         </h3>
         <div class="app-grid">
           <div
-            v-for="app in filteredAppsWithRules"
+            v-for="app in displayedAppsWithRules"
             :key="app.packageName + '-' + (app.userId || 0)"
             :data-package="app.packageName"
             class="app-card"
@@ -110,6 +110,15 @@
         </div>
       </div>
 
+      <!-- 加载更多提示 -->
+      <div v-if="hasMoreWithRules || hasMoreWithoutRules" class="load-more">
+        <div v-if="isLoadingMore" class="loading-spinner">
+          <div class="spinner small"></div>
+          <span>加载中...</span>
+        </div>
+        <span v-else class="load-more-hint">向下滚动加载更多</span>
+      </div>
+
       <!-- 其他应用 -->
       <div v-if="filteredAppsWithoutRules.length > 0 && currentTab !== 'configured'" class="app-section" :style="{ marginBottom: '100px' }">
         <h3 class="section-title">
@@ -118,7 +127,7 @@
         </h3>
         <div class="app-grid">
           <div
-            v-for="app in filteredAppsWithoutRules"
+            v-for="app in displayedAppsWithoutRules"
             :key="app.packageName + '-' + (app.userId || 0)"
             :data-package="app.packageName"
             class="app-card"
@@ -176,6 +185,12 @@ const currentTab = ref('all')
 const scrollContainer = ref(null)
 const visibleApps = ref(new Set())
 let observer = null
+
+// 懒加载相关
+const BATCH_SIZE = 30 // 每批加载的应用数量
+const displayedCountWithRules = ref(BATCH_SIZE)
+const displayedCountWithoutRules = ref(BATCH_SIZE)
+const isLoadingMore = ref(false)
 
 const tabs = [
   { label: '全部', value: 'all' },
@@ -245,6 +260,24 @@ const filteredAppsWithoutRules = computed(() => {
       (!config.redirectRules || config.redirectRules.length === 0) &&
       (!config.readOnlyRules || config.readOnlyRules.length === 0))
   })
+})
+
+// 懒加载：限制显示数量
+const displayedAppsWithRules = computed(() => {
+  return filteredAppsWithRules.value.slice(0, displayedCountWithRules.value)
+})
+
+const displayedAppsWithoutRules = computed(() => {
+  return filteredAppsWithoutRules.value.slice(0, displayedCountWithoutRules.value)
+})
+
+// 是否还有更多应用可加载
+const hasMoreWithRules = computed(() => {
+  return displayedAppsWithRules.value.length < filteredAppsWithRules.value.length
+})
+
+const hasMoreWithoutRules = computed(() => {
+  return displayedAppsWithoutRules.value.length < filteredAppsWithoutRules.value.length
 })
 
 const getAppIconUrl = (pkg) => {
@@ -382,6 +415,38 @@ watch([filteredAppsWithRules, filteredAppsWithoutRules], () => {
   })
 })
 
+// 加载更多应用
+const loadMore = (type) => {
+  if (isLoadingMore.value) return
+  isLoadingMore.value = true
+  
+  // 模拟异步加载
+  setTimeout(() => {
+    if (type === 'withRules') {
+      displayedCountWithRules.value += BATCH_SIZE
+    } else {
+      displayedCountWithoutRules.value += BATCH_SIZE
+    }
+    isLoadingMore.value = false
+  }, 100)
+}
+
+// 滚动到底部检测
+const handleScroll = (e) => {
+  const target = e.target
+  const scrollBottom = target.scrollTop + target.clientHeight
+  const scrollHeight = target.scrollHeight
+  
+  // 距离底部 200px 时加载更多
+  if (scrollHeight - scrollBottom < 200) {
+    if (hasMoreWithRules.value) {
+      loadMore('withRules')
+    } else if (hasMoreWithoutRules.value) {
+      loadMore('withoutRules')
+    }
+  }
+}
+
 // 初始化 Intersection Observer
 const initIntersectionObserver = () => {
   if (observer) {
@@ -407,6 +472,17 @@ const initIntersectionObserver = () => {
     observer.observe(card)
   })
 }
+
+// 重置懒加载计数器
+const resetLazyLoad = () => {
+  displayedCountWithRules.value = BATCH_SIZE
+  displayedCountWithoutRules.value = BATCH_SIZE
+}
+
+// 监听标签页和搜索变化，重置懒加载
+watch([currentTab, searchQuery], () => {
+  resetLazyLoad()
+})
 </script>
 
 <style scoped>
@@ -785,5 +861,31 @@ const initIntersectionObserver = () => {
 
 .empty-state p {
   font-size: 14px;
+}
+
+/* 加载更多 */
+.load-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  color: #9ca3af;
+  font-size: 13px;
+}
+
+.loading-spinner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.spinner.small {
+  width: 20px;
+  height: 20px;
+  border-width: 2px;
+}
+
+.load-more-hint {
+  opacity: 0.7;
 }
 </style>

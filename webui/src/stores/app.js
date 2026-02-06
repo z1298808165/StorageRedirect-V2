@@ -716,22 +716,33 @@ export const useAppStore = defineStore('app', () => {
     // daemon 保存失败，使用备用方案：直接写入配置文件
     console.log('Daemon app set failed, trying direct file write. Result:', result)
     try {
-      // 先读取现有配置
+      // 先读取现有配置（确保获取最新数据）
       const config = await readConfigFile()
+      console.log('saveAppConfig: read existing config, apps count:', Object.keys(config.apps || {}).length)
       if (!config.apps) {
         config.apps = {}
       }
       
-      // 合并配置：保留现有配置，只更新提供的字段
+      // 获取该应用的现有配置
       const existingConfig = config.apps[pkg] || {}
-      config.apps[pkg] = {
-        ...existingConfig,
-        ...configToSave
-      }
+      console.log('saveAppConfig: existing config for', pkg, ':', JSON.stringify(existingConfig).substring(0, 200))
+      
+      // 合并配置：保留现有配置，只更新提供的字段
+      // 注意：configToSave 可能包含空数组，需要特殊处理
+      const mergedConfig = { ...existingConfig }
+      
+      // 只更新非空数组或明确提供的字段
+      if (configToSave.enabled !== undefined) mergedConfig.enabled = configToSave.enabled
+      if (configToSave.redirectRules !== undefined) mergedConfig.redirectRules = configToSave.redirectRules
+      if (configToSave.readOnlyRules !== undefined) mergedConfig.readOnlyRules = configToSave.readOnlyRules
+      if (configToSave.monitorPaths !== undefined) mergedConfig.monitorPaths = configToSave.monitorPaths
+      
+      config.apps[pkg] = mergedConfig
+      console.log('saveAppConfig: merged config:', JSON.stringify(mergedConfig).substring(0, 200))
       
       const success = await writeConfigFile(config)
       if (success) {
-        appConfigs.value[pkg] = config.apps[pkg]
+        appConfigs.value[pkg] = mergedConfig
         ksuApi.toast('保存成功')
         return true
       } else {
