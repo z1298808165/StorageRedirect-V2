@@ -37,7 +37,7 @@
     <div v-if="currentTab === 'redirect'" class="tab-content">
       <div class="section-header">
         <h3>重定向规则</h3>
-        <button class="add-btn" @click="openRedirectModal">
+        <button class="add-btn" @click="openRedirectModal()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="12" y1="5" x2="12" y2="19"/>
             <line x1="5" y1="12" x2="19" y2="12"/>
@@ -120,7 +120,7 @@
     <div v-if="currentTab === 'readonly'" class="tab-content">
       <div class="section-header">
         <h3>只读规则</h3>
-        <button class="add-btn" @click="openReadonlyModal">
+        <button class="add-btn" @click="openReadonlyModal()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="12" y1="5" x2="12" y2="19"/>
             <line x1="5" y1="12" x2="19" y2="12"/>
@@ -497,7 +497,9 @@ const saveRedirectRule = async () => {
   console.log('saveRedirectRule: currentRules type:', typeof currentRules, 'isArray:', Array.isArray(currentRules))
 
   let newRules
-  if (editingRedirectIndex.value !== null) {
+  // 检查 editingRedirectIndex 是否为数字（防止事件对象传入）
+  const isEditing = typeof editingRedirectIndex.value === 'number'
+  if (isEditing) {
     // 编辑现有规则
     newRules = currentRules.map((rule, index) =>
       index === editingRedirectIndex.value ? { src, dst } : rule
@@ -591,7 +593,9 @@ const saveReadonlyRule = async () => {
   console.log('saveReadonlyRule: currentRules type:', typeof currentRules, 'isArray:', Array.isArray(currentRules))
 
   let newRules
-  if (editingReadonlyIndex.value !== null) {
+  // 检查 editingReadonlyIndex 是否为数字（防止事件对象传入）
+  const isEditing = typeof editingReadonlyIndex.value === 'number'
+  if (isEditing) {
     // 编辑现有规则
     newRules = currentRules.map((rule, index) =>
       index === editingReadonlyIndex.value ? { path } : rule
