@@ -486,8 +486,11 @@ const saveRedirectRule = async () => {
     return
   }
 
+  console.log('saveRedirectRule: before update, config.value:', JSON.stringify(config.value))
+  console.log('saveRedirectRule: current redirectRules:', JSON.stringify(config.value.redirectRules))
+
   // 创建新的规则数组以确保响应式更新
-  const newRules = [...config.value.redirectRules]
+  const newRules = [...(config.value.redirectRules || [])]
   if (editingRedirectIndex.value !== null) {
     newRules[editingRedirectIndex.value] = { src, dst }
   } else {
@@ -495,12 +498,15 @@ const saveRedirectRule = async () => {
   }
   config.value.redirectRules = newRules
 
+  console.log('saveRedirectRule: after update, newRules:', JSON.stringify(newRules))
+  console.log('saveRedirectRule: after update, config.value.redirectRules:', JSON.stringify(config.value.redirectRules))
+
   closeRedirectModal()
-  
+
   // 等待响应式更新完成后再保存
   await nextTick()
   console.log('saveRedirectRule: after nextTick, redirectRules:', JSON.stringify(config.value.redirectRules))
-  
+
   // 只保存 redirectRules 字段
   await saveConfig('redirectRules')
 }
@@ -544,23 +550,29 @@ const saveReadonlyRule = async () => {
     return
   }
 
+  console.log('saveReadonlyRule: before update, config.value:', JSON.stringify(config.value))
+  console.log('saveReadonlyRule: current readOnlyRules:', JSON.stringify(config.value.readOnlyRules))
+
   // 创建新的规则数组以确保响应式更新
-  const newRules = [...config.value.readOnlyRules]
-  
+  const newRules = [...(config.value.readOnlyRules || [])]
+
   if (editingReadonlyIndex.value !== null) {
     newRules[editingReadonlyIndex.value] = { path }
   } else {
     newRules.push({ path })
   }
-  
+
   config.value.readOnlyRules = newRules
 
+  console.log('saveReadonlyRule: after update, newRules:', JSON.stringify(newRules))
+  console.log('saveReadonlyRule: after update, config.value.readOnlyRules:', JSON.stringify(config.value.readOnlyRules))
+
   closeReadonlyModal()
-  
+
   // 等待响应式更新完成后再保存
   await nextTick()
   console.log('saveReadonlyRule: after nextTick, readOnlyRules:', JSON.stringify(config.value.readOnlyRules))
-  
+
   // 只保存 readOnlyRules 字段
   await saveConfig('readOnlyRules')
 }
@@ -789,17 +801,20 @@ onMounted(async () => {
 
   // 加载配置
   const savedConfig = await appStore.getAppConfig(props.pkg)
+  console.log('onMounted: loaded savedConfig:', JSON.stringify(savedConfig))
+
   if (savedConfig) {
-    config.value = {
-      enabled: savedConfig.enabled || false,
-      redirectRules: savedConfig.redirectRules || [],
-      readOnlyRules: savedConfig.readOnlyRules || [],
-      monitorPaths: savedConfig.monitorPaths || []
-    }
+    // 使用 Object.assign 保持响应式，而不是替换整个对象
+    config.value.enabled = savedConfig.enabled === true
+    config.value.redirectRules = Array.isArray(savedConfig.redirectRules) ? [...savedConfig.redirectRules] : []
+    config.value.readOnlyRules = Array.isArray(savedConfig.readOnlyRules) ? [...savedConfig.readOnlyRules] : []
+    config.value.monitorPaths = Array.isArray(savedConfig.monitorPaths) ? [...savedConfig.monitorPaths] : []
   } else {
     // 如果没有保存的配置，确保结构正确
     ensureConfigStructure()
   }
+
+  console.log('onMounted: final config.value:', JSON.stringify(config.value))
 
   // 加载日志
   await loadLogs()

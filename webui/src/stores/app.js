@@ -587,9 +587,11 @@ export const useAppStore = defineStore('app', () => {
       // 使用单引号包裹 base64 字符串，避免 shell 变量扩展
       // 先将 base64 内容写入临时文件，再解码到目标文件
       const tempFile = '/tmp/sr_config_base64.tmp'
-      const writeTempResult = await ksuApi.exec(`cat > ${tempFile} << 'EOF__STORAGE_REDIRECT'
-${base64Json}
-EOF__STORAGE_REDIRECT`)
+
+      // 使用 printf 直接写入文件，避免 heredoc 的格式问题
+      // 先将 base64 内容通过 printf 写入临时文件
+      const writeCmd = `printf '%s' '${base64Json.replace(/'/g, "'\"'\"'")}' > ${tempFile}`
+      const writeTempResult = await ksuApi.exec(writeCmd)
       console.log('writeConfigFile: write temp result:', JSON.stringify(writeTempResult))
 
       if (!writeTempResult || writeTempResult.errno !== 0) {
