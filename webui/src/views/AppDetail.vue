@@ -610,17 +610,27 @@ const saveConfig = async (fieldToUpdate = null) => {
     if (fieldToUpdate) {
       // 只更新指定字段
       const fieldValue = config.value[fieldToUpdate]
-      configToSave[fieldToUpdate] = JSON.parse(JSON.stringify(fieldValue))
+      // 确保字段值存在且可序列化
+      if (fieldValue !== undefined) {
+        configToSave[fieldToUpdate] = JSON.parse(JSON.stringify(fieldValue))
+      } else {
+        configToSave[fieldToUpdate] = fieldToUpdate === 'enabled' ? false : []
+      }
       console.log('saveConfig: saving field:', fieldToUpdate, 'value:', JSON.stringify(configToSave[fieldToUpdate]))
     } else {
       // 更新所有字段（用于开关切换）
+      // 确保所有字段都有默认值
+      const redirectRules = config.value.redirectRules || []
+      const readOnlyRules = config.value.readOnlyRules || []
+      const monitorPaths = config.value.monitorPaths || []
+      
       configToSave = {
-        enabled: config.value.enabled,
-        redirectRules: JSON.parse(JSON.stringify(config.value.redirectRules || [])),
-        readOnlyRules: JSON.parse(JSON.stringify(config.value.readOnlyRules || [])),
-        monitorPaths: JSON.parse(JSON.stringify(config.value.monitorPaths || []))
+        enabled: config.value.enabled || false,
+        redirectRules: JSON.parse(JSON.stringify(redirectRules)),
+        readOnlyRules: JSON.parse(JSON.stringify(readOnlyRules)),
+        monitorPaths: JSON.parse(JSON.stringify(monitorPaths))
       }
-      console.log('saveConfig: saving all config')
+      console.log('saveConfig: saving all config:', JSON.stringify(configToSave))
     }
     
     const success = await appStore.saveAppConfig(props.pkg, configToSave)

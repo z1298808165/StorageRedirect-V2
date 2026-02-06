@@ -485,10 +485,14 @@ watch([currentTab, searchQuery], () => {
 <style scoped>
 .app-list {
   padding-bottom: 80px;
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
 }
 
 .scroll-container {
   overflow-y: auto;
+  overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   height: calc(100vh - 140px); /* 减去搜索栏和底部空间 */
   width: 100%;
@@ -498,6 +502,13 @@ watch([currentTab, searchQuery], () => {
   width: 100%;
   padding: 0 16px;
   box-sizing: border-box;
+}
+
+.app-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  width: 100%;
 }
 
 /* 应用卡片加载动画 */
