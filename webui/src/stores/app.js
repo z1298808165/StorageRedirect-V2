@@ -479,6 +479,7 @@ export const useAppStore = defineStore('app', () => {
           }
         } catch (e) {
           console.error('[store] Failed to load user packages:', e)
+          console.error('[store] Error stack:', e.stack)
         }
       }
 
@@ -495,6 +496,7 @@ export const useAppStore = defineStore('app', () => {
           }
         } catch (e) {
           console.error('[store] Failed to load system packages:', e)
+          console.error('[store] Error stack:', e.stack)
         }
       }
 
@@ -512,33 +514,48 @@ export const useAppStore = defineStore('app', () => {
 
       // 注意：getPackagesInfo 是同步函数
       console.log('[store] Calling getPackagesInfo...')
-      const info = getPackagesInfo(allPackages)
+      let info
+      try {
+        info = getPackagesInfo(allPackages)
+      } catch (e) {
+        console.error('[store] getPackagesInfo threw error:', e)
+        console.error('[store] Error stack:', e.stack)
+        throw e
+      }
       console.log('[store] Info result:', info)
       console.log('[store] Info is array:', Array.isArray(info))
 
       if (!Array.isArray(info)) {
+        console.error('[store] getPackagesInfo returned non-array:', info)
         throw new Error('获取应用信息返回的不是数组')
       }
 
       console.log('[store] Info count:', info.length)
 
       // 过滤掉无效的应用数据
-      apps.value = info
-        .filter(p => p && typeof p === 'object' && p.packageName)
-        .map(p => ({
-          packageName: p.packageName,
-          appLabel: p.appLabel || p.packageName,
-          versionName: p.versionName || '',
-          versionCode: p.versionCode || 0,
-          isSystem: p.isSystem || false,
-          uid: p.uid || 0,
-          userId: p.userId || 0
-        }))
+      try {
+        apps.value = info
+          .filter(p => p && typeof p === 'object' && p.packageName)
+          .map(p => ({
+            packageName: p.packageName,
+            appLabel: p.appLabel || p.packageName,
+            versionName: p.versionName || '',
+            versionCode: p.versionCode || 0,
+            isSystem: p.isSystem || false,
+            uid: p.uid || 0,
+            userId: p.userId || 0
+          }))
+      } catch (e) {
+        console.error('[store] Error processing app info:', e)
+        console.error('[store] Error stack:', e.stack)
+        throw e
+      }
 
       console.log('[store] Loaded apps:', apps.value.length)
       return true
     } catch (e) {
       console.error('[store] Failed to load apps:', e)
+      console.error('[store] Error stack:', e.stack)
       loadError.value = e.message || '未知错误'
       return false
     } finally {
