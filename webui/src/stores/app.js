@@ -460,35 +460,17 @@ export const useAppStore = defineStore('app', () => {
 
     try {
       console.log('[store] Loading apps...')
-      console.log('[store] Checking KernelSU API availability...')
-      
-      // 首先检测 KernelSU API 是否可用
-      const apiAvailable = await checkKsuApiAvailable()
-      console.log('[store] KernelSU API available:', apiAvailable)
-      
-      if (!apiAvailable) {
-        console.warn('[store] KernelSU API not available, switching to demo mode')
-        loadDemoData()
-        return true
-      }
-
-      console.log('[store] ksuApi.isAvailable():', ksuApi.isAvailable())
-
-      // 检查 KernelSU API 是否可用
-      if (!ksuApi.isAvailable()) {
-        console.error('[store] KernelSU API is not available')
-        throw new Error('KernelSU API 不可用，请在 KernelSU 管理器中打开 WebUI')
-      }
+      console.log('[store] Using kernelsu API directly...')
 
       let allPackages = []
 
-      // 根据类型获取应用包名列表 - 参考示例代码实现
-      // 注意：listPackages 现在需要 await
+      // 根据类型获取应用包名列表
+      // 注意：listPackages 是同步函数
       if (type === 'all' || type === 'user') {
         // 获取用户应用
         try {
-          console.log('[store] Calling ksuApi.listPackages("user")...')
-          const userPackages = await ksuApi.listPackages('user')
+          console.log('[store] Calling listPackages("user")...')
+          const userPackages = listPackages('user')
           console.log('[store] User packages result:', userPackages)
           console.log('[store] User packages is array:', Array.isArray(userPackages))
 
@@ -503,8 +485,8 @@ export const useAppStore = defineStore('app', () => {
       if (type === 'all' || type === 'system') {
         // 获取系统应用
         try {
-          console.log('[store] Calling ksuApi.listPackages("system")...')
-          const systemPackages = await ksuApi.listPackages('system')
+          console.log('[store] Calling listPackages("system")...')
+          const systemPackages = listPackages('system')
           console.log('[store] System packages result:', systemPackages)
           console.log('[store] System packages is array:', Array.isArray(systemPackages))
 
@@ -528,9 +510,9 @@ export const useAppStore = defineStore('app', () => {
         throw new Error('获取应用列表为空')
       }
 
-      // 注意：getPackagesInfo 现在需要 await
-      console.log('[store] Calling ksuApi.getPackagesInfo...')
-      const info = await ksuApi.getPackagesInfo(allPackages)
+      // 注意：getPackagesInfo 是同步函数
+      console.log('[store] Calling getPackagesInfo...')
+      const info = getPackagesInfo(allPackages)
       console.log('[store] Info result:', info)
       console.log('[store] Info is array:', Array.isArray(info))
 
@@ -539,12 +521,6 @@ export const useAppStore = defineStore('app', () => {
       }
 
       console.log('[store] Info count:', info.length)
-
-      // 确保 info 是数组
-      if (!Array.isArray(info)) {
-        console.error('[store] info is not an array:', info)
-        throw new Error('获取应用信息返回的不是数组')
-      }
 
       // 过滤掉无效的应用数据
       apps.value = info
