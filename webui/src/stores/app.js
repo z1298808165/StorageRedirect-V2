@@ -254,6 +254,10 @@ export const useAppStore = defineStore('app', () => {
   const daemonStatus = ref({ online: false, version: '' })
   const isDemoMode = ref(false)
   const loadError = ref(null)
+  
+  // 保存队列，防止并发保存导致数据丢失
+  const saveQueue = ref([])
+  const isSaving = ref(false)
 
   // Getters
   const appsWithRules = computed(() => {
@@ -689,8 +693,8 @@ export const useAppStore = defineStore('app', () => {
     return null
   }
 
-  // 保存应用配置
-  const saveAppConfig = async (pkg, appConfig) => {
+  // 实际执行保存操作
+  const doSaveAppConfig = async (pkg, appConfig) => {
     if (isDemoMode.value) {
       demoConfigs[pkg] = JSON.parse(JSON.stringify(appConfig))
       appConfigs.value[pkg] = JSON.parse(JSON.stringify(appConfig))
@@ -754,6 +758,29 @@ export const useAppStore = defineStore('app', () => {
       ksuApi.toast('保存失败: ' + e.message)
       return false
     }
+  }
+
+  // 处理保存队列
+  const processSaveQueue = async () => {
+    if (isSaving.value || saveQueue.value.length === 0) return
+    
+    isSaving.value = true
+    
+    while (saveQueue.value.length > 0) {
+      const { pkg, appConfig, resolve } = saveQueue.value.shift()
+      const result = await doSaveAppConfig(pkg, appConfig)
+      resolve(result)
+    }
+    
+    isSaving.value = false
+  }
+
+  // 保存应用配置（使用队列确保顺序执行）
+  const saveAppConfig = async (pkg, appConfig) => {
+    return new Promise((resolve) => {
+      saveQueue.value.push({ pkg, appConfig, resolve })
+      processSaveQueue()
+    })
   }
 
   // 保存全局配置
