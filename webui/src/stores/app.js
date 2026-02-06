@@ -556,7 +556,9 @@ export const useAppStore = defineStore('app', () => {
       const configJson = JSON.stringify(config, null, 2)
       // 使用 base64 编码避免 shell 转义问题
       const base64Json = btoa(configJson)
-      const result = await ksuApi.exec(`echo "${base64Json}" | base64 -d > ${CONFIG_PATH}`)
+      // 先创建配置目录，然后写入文件
+      const configDir = CONFIG_PATH.substring(0, CONFIG_PATH.lastIndexOf('/'))
+      const result = await ksuApi.exec(`mkdir -p ${configDir} && echo "${base64Json}" | base64 -d > ${CONFIG_PATH}`)
       if (result && result.errno === 0) {
         return true
       }
