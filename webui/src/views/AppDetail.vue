@@ -519,6 +519,17 @@ const saveRedirectRule = async () => {
 
   console.log('saveRedirectRule: after update, config.value:', JSON.stringify(config.value))
 
+  // 同时更新 store 中的配置，确保 saveAppConfig 能获取到最新的内存配置
+  const appStore = useAppStore()
+  if (!appStore.appConfigs[props.pkg]) {
+    appStore.appConfigs[props.pkg] = {}
+  }
+  appStore.appConfigs[props.pkg] = {
+    ...appStore.appConfigs[props.pkg],
+    redirectRules: newRules
+  }
+  console.log('saveRedirectRule: updated appStore.appConfigs:', JSON.stringify(appStore.appConfigs[props.pkg]))
+
   closeRedirectModal()
 
   // 等待响应式更新完成后再保存
@@ -602,6 +613,17 @@ const saveReadonlyRule = async () => {
 
   console.log('saveReadonlyRule: after update, config.value:', JSON.stringify(config.value))
 
+  // 同时更新 store 中的配置，确保 saveAppConfig 能获取到最新的内存配置
+  const appStore = useAppStore()
+  if (!appStore.appConfigs[props.pkg]) {
+    appStore.appConfigs[props.pkg] = {}
+  }
+  appStore.appConfigs[props.pkg] = {
+    ...appStore.appConfigs[props.pkg],
+    readOnlyRules: newRules
+  }
+  console.log('saveReadonlyRule: updated appStore.appConfigs:', JSON.stringify(appStore.appConfigs[props.pkg]))
+
   closeReadonlyModal()
 
   // 等待响应式更新完成后再保存
@@ -661,8 +683,12 @@ const moveRule = (type, index, direction) => {
 
 const saveConfig = async (fieldToUpdate = null) => {
   try {
+    console.log('saveConfig: START - config.value:', JSON.stringify(config.value))
+
     // 确保配置结构正确
     ensureConfigStructure()
+
+    console.log('saveConfig: after ensureConfigStructure - config.value:', JSON.stringify(config.value))
 
     // 创建要保存的配置对象，只包含需要更新的字段
     let configToSave = {}
@@ -670,7 +696,7 @@ const saveConfig = async (fieldToUpdate = null) => {
     if (fieldToUpdate) {
       // 只更新指定字段
       const fieldValue = config.value[fieldToUpdate]
-      console.log('saveConfig: fieldToUpdate:', fieldToUpdate, 'fieldValue:', fieldValue)
+      console.log('saveConfig: fieldToUpdate:', fieldToUpdate, 'fieldValue:', JSON.stringify(fieldValue))
 
       // 确保字段值存在且可序列化
       if (fieldValue !== undefined) {
