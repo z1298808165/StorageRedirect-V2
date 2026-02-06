@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -91,24 +92,50 @@ func main() {
 
 func handleGlobalCmd(socketPath string, args []string) (*Response, error) {
 	if len(args) < 1 {
-		fmt.Fprintf(os.Stderr, "用法: daemonctl global <get|set>\n")
+		fmt.Fprintf(os.Stderr, "用法: daemonctl global <get|set> [--json '<json>'] [--json-base64 '<base64>']\n")
 		os.Exit(2)
 	}
 
 	subCmd := args[0]
+	params := make(map[string]interface{})
+
+	// 解析参数
+	for i := 1; i < len(args); i++ {
+		switch args[i] {
+		case "--json", "-j":
+			if i+1 < len(args) {
+				var global map[string]interface{}
+				if err := json.Unmarshal([]byte(args[i+1]), &global); err != nil {
+					return nil, fmt.Errorf("invalid JSON: %w", err)
+				}
+				params["global"] = global
+				i++
+			}
+		case "--json-base64":
+			if i+1 < len(args) {
+				jsonBytes, err := base64.StdEncoding.DecodeString(args[i+1])
+				if err != nil {
+					return nil, fmt.Errorf("invalid base64: %w", err)
+				}
+				var global map[string]interface{}
+				if err := json.Unmarshal(jsonBytes, &global); err != nil {
+					return nil, fmt.Errorf("invalid JSON: %w", err)
+				}
+				params["global"] = global
+				i++
+			}
+		}
+	}
+
 	switch subCmd {
 	case "get":
 		return sendCommand(socketPath, "global.get", nil)
 	case "set":
-		if len(args) < 2 {
-			fmt.Fprintf(os.Stderr, "用法: daemonctl global set '<json>'\n")
+		if params["global"] == nil {
+			fmt.Fprintf(os.Stderr, "缺少 --json 或 --json-base64 参数\n")
 			os.Exit(2)
 		}
-		var global map[string]interface{}
-		if err := json.Unmarshal([]byte(args[1]), &global); err != nil {
-			return nil, fmt.Errorf("invalid JSON: %w", err)
-		}
-		return sendCommand(socketPath, "global.set", map[string]interface{}{"global": global})
+		return sendCommand(socketPath, "global.set", params)
 	default:
 		fmt.Fprintf(os.Stderr, "未知子命令: %s\n", subCmd)
 		os.Exit(2)
@@ -118,7 +145,7 @@ func handleGlobalCmd(socketPath string, args []string) (*Response, error) {
 
 func handleAppCmd(socketPath string, args []string) (*Response, error) {
 	if len(args) < 1 {
-		fmt.Fprintf(os.Stderr, "用法: daemonctl app <get|set|list|delete> [--pkg <package>] [--json '<json>']\n")
+		fmt.Fprintf(os.Stderr, "用法: daemonctl app <get|set|list|delete> [--pkg <package>] [--json '<json>'] [--json-base64 '<base64>']\n")
 		os.Exit(2)
 	}
 
@@ -137,6 +164,19 @@ func handleAppCmd(socketPath string, args []string) (*Response, error) {
 			if i+1 < len(args) {
 				var app map[string]interface{}
 				if err := json.Unmarshal([]byte(args[i+1]), &app); err != nil {
+					return nil, fmt.Errorf("invalid JSON: %w", err)
+				}
+				params["app"] = app
+				i++
+			}
+		case "--json-base64":
+			if i+1 < len(args) {
+				jsonBytes, err := base64.StdEncoding.DecodeString(args[i+1])
+				if err != nil {
+					return nil, fmt.Errorf("invalid base64: %w", err)
+				}
+				var app map[string]interface{}
+				if err := json.Unmarshal(jsonBytes, &app); err != nil {
 					return nil, fmt.Errorf("invalid JSON: %w", err)
 				}
 				params["app"] = app

@@ -305,7 +305,7 @@ export const useAppStore = defineStore('app', () => {
         {
           const jsonStr = JSON.stringify(params.app)
           const base64Json = btoa(jsonStr)
-          command += ` app set --pkg "${params.pkg}" --json "${jsonStr}"`
+          command += ` app set --pkg "${params.pkg}" --json-base64 "${base64Json}"`
         }
         break
       case 'app delete':
@@ -319,7 +319,7 @@ export const useAppStore = defineStore('app', () => {
         {
           const jsonStr = JSON.stringify(params.global)
           const base64Json = btoa(jsonStr)
-          command += ` global set --json "${jsonStr}"`
+          command += ` global set --json-base64 "${base64Json}"`
         }
         break
       case 'log tail':

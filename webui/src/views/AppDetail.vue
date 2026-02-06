@@ -469,28 +469,31 @@ const isValidPath = (path) => {
 const saveRedirectRule = async () => {
   const src = redirectForm.value.src.trim()
   const dst = redirectForm.value.dst.trim()
-  
+
   if (!src || !dst) {
     alert('请填写源路径和目标路径')
     return
   }
-  
+
   if (!isValidPath(src)) {
     alert('源路径格式不正确，路径必须以 / 开头，不能包含特殊字符')
     return
   }
-  
+
   if (!isValidPath(dst)) {
     alert('目标路径格式不正确，路径必须以 / 开头，不能包含特殊字符')
     return
   }
-  
+
+  // 创建新的规则数组以确保响应式更新
+  const newRules = [...config.value.redirectRules]
   if (editingRedirectIndex.value !== null) {
-    config.value.redirectRules[editingRedirectIndex.value] = { src, dst }
+    newRules[editingRedirectIndex.value] = { src, dst }
   } else {
-    config.value.redirectRules.push({ src, dst })
+    newRules.push({ src, dst })
   }
-  
+  config.value.redirectRules = newRules
+
   closeRedirectModal()
   await saveConfig()
 }
@@ -523,23 +526,26 @@ const closeReadonlyModal = () => {
 
 const saveReadonlyRule = async () => {
   const path = readonlyForm.value.path.trim()
-  
+
   if (!path) {
     alert('请填写只读路径')
     return
   }
-  
+
   if (!isValidPath(path)) {
     alert('路径格式不正确，路径必须以 / 开头，不能包含特殊字符')
     return
   }
-  
+
+  // 创建新的规则数组以确保响应式更新
+  const newRules = [...config.value.readOnlyRules]
   if (editingReadonlyIndex.value !== null) {
-    config.value.readOnlyRules[editingReadonlyIndex.value] = { path }
+    newRules[editingReadonlyIndex.value] = { path }
   } else {
-    config.value.readOnlyRules.push({ path })
+    newRules.push({ path })
   }
-  
+  config.value.readOnlyRules = newRules
+
   closeReadonlyModal()
   await saveConfig()
 }
@@ -561,21 +567,26 @@ const closeDeleteModal = () => {
 
 const executeDelete = async () => {
   if (deleteType.value === 'redirect') {
-    config.value.redirectRules.splice(deleteIndex.value, 1)
+    const newRules = [...config.value.redirectRules]
+    newRules.splice(deleteIndex.value, 1)
+    config.value.redirectRules = newRules
   } else if (deleteType.value === 'readonly') {
-    config.value.readOnlyRules.splice(deleteIndex.value, 1)
+    const newRules = [...config.value.readOnlyRules]
+    newRules.splice(deleteIndex.value, 1)
+    config.value.readOnlyRules = newRules
   }
   closeDeleteModal()
   await saveConfig()
 }
 
 const moveRule = (type, index, direction) => {
-  const rules = type === 'redirect' ? config.value.redirectRules : []
+  const rules = type === 'redirect' ? [...config.value.redirectRules] : []
   const newIndex = index + direction
   if (newIndex >= 0 && newIndex < rules.length) {
     const temp = rules[index]
     rules[index] = rules[newIndex]
     rules[newIndex] = temp
+    config.value.redirectRules = rules
     saveConfig()
   }
 }
