@@ -26,6 +26,9 @@
       </div>
     </div>
 
+    <!-- 可视区域检测容器 -->
+    <div ref="scrollContainer" class="scroll-container">
+
     <!-- 加载状态 -->
     <div v-if="appStore.loading" class="loading">
       <div class="spinner"></div>
@@ -72,11 +75,17 @@
           <div
             v-for="app in filteredAppsWithRules"
             :key="app.packageName + '-' + (app.userId || 0)"
+            :data-package="app.packageName"
             class="app-card"
             @click="goToDetail(app.packageName)"
           >
             <div class="app-icon">
-              <img :src="getAppIconUrl(app.packageName)" :alt="app.appLabel" />
+              <LazyAppIcon
+                :src="getAppIconUrl(app.packageName)"
+                :alt="app.appLabel"
+                :package-name="app.packageName"
+                :size="52"
+              />
             </div>
             <div class="app-info">
               <div class="app-name">
@@ -111,11 +120,17 @@
           <div
             v-for="app in filteredAppsWithoutRules"
             :key="app.packageName + '-' + (app.userId || 0)"
+            :data-package="app.packageName"
             class="app-card"
             @click="goToDetail(app.packageName)"
           >
             <div class="app-icon">
-              <img :src="getAppIconUrl(app.packageName)" :alt="app.appLabel" />
+              <LazyAppIcon
+                :src="getAppIconUrl(app.packageName)"
+                :alt="app.appLabel"
+                :package-name="app.packageName"
+                :size="52"
+              />
             </div>
             <div class="app-info">
               <div class="app-name">
@@ -143,19 +158,24 @@
         <p>没有找到匹配的应用</p>
       </div>
     </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAppStore } from '../stores/app'
+import LazyAppIcon from '../components/LazyAppIcon.vue'
 
 const router = useRouter()
 const appStore = useAppStore()
 
 const searchQuery = ref('')
 const currentTab = ref('all')
+const scrollContainer = ref(null)
+const visibleApps = ref(new Set())
+let observer = null
 
 const tabs = [
   { label: '全部', value: 'all' },
@@ -343,12 +363,62 @@ onMounted(async () => {
     console.error('[AppList] Failed to load real apps, loading demo data:', e)
     appStore.loadDemoData()
   }
+
+  // 初始化 Intersection Observer
+  nextTick(() => {
+    initIntersectionObserver()
+  })
 })
+
+onUnmounted(() => {
+  if (observer) {
+    observer.disconnect()
+    observer = null
+  }
+})
+
+// 监听应用列表变化，重新初始化 observer
+watch([filteredAppsWithRules, filteredAppsWithoutRules], () => {
+  nextTick(() => {
+    initIntersectionObserver()
+  })
+})
+
+// 初始化 Intersection Observer
+const initIntersectionObserver = () => {
+  if (observer) {
+    observer.disconnect()
+  }
+
+  observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      const pkg = entry.target.getAttribute('data-package')
+      if (entry.isIntersecting && pkg) {
+        visibleApps.value.add(pkg)
+      }
+    })
+  }, {
+    root: scrollContainer.value,
+    rootMargin: '100px', // 提前 100px 开始加载
+    threshold: 0.1
+  })
+
+  // 观察所有应用卡片
+  const cards = document.querySelectorAll('.app-card[data-package]')
+  cards.forEach(card => {
+    observer.observe(card)
+  })
+}
 </script>
 
 <style scoped>
 .app-list {
   padding-bottom: 80px;
+}
+
+.scroll-container {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .filter-bar {
