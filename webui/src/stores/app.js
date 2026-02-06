@@ -339,12 +339,19 @@ export const useAppStore = defineStore('app', () => {
       const { errno, stdout, stderr } = await ksuApi.exec(command)
       if (errno === 0) {
         const result = JSON.parse(stdout)
-        return { ok: true, ...result }
+        return result
       }
-      throw new Error(`Command failed: ${stderr || stdout}`)
+      // 命令执行失败，尝试解析错误输出
+      try {
+        const errorResult = JSON.parse(stdout)
+        return errorResult
+      } catch (parseError) {
+        // 不是 JSON 格式，返回错误
+        return { ok: false, error: { code: 'E_EXEC', message: stderr || stdout } }
+      }
     } catch (e) {
       console.error('Daemon call failed:', e)
-      throw e
+      return { ok: false, error: { code: 'E_EXCEPTION', message: e.message } }
     }
   }
 
@@ -624,18 +631,15 @@ export const useAppStore = defineStore('app', () => {
       return demoConfigs[pkg] || null
     }
 
-    try {
-      // 首先尝试通过 daemon 获取
-      const result = await callDaemon('app get', { pkg })
-      if (result && result.ok && result.app) {
-        appConfigs.value[pkg] = result.app
-        return result.app
-      }
-    } catch (e) {
-      console.log('Daemon app get failed, trying direct file read:', e)
+    // 首先尝试通过 daemon 获取
+    const result = await callDaemon('app get', { pkg })
+    if (result && result.ok && result.app) {
+      appConfigs.value[pkg] = result.app
+      return result.app
     }
 
-    // 备用方案：直接读取配置文件
+    // daemon 获取失败（可能是应用不存在），尝试直接读取配置文件
+    console.log('Daemon app get failed, trying direct file read:', result?.error)
     try {
       const config = await readConfigFile()
       if (config && config.apps && config.apps[pkg]) {
@@ -643,7 +647,7 @@ export const useAppStore = defineStore('app', () => {
         return config.apps[pkg]
       }
     } catch (e) {
-      console.error('Failed to get app config:', e)
+      console.error('Failed to get app config from file:', e)
     }
     return null
   }
@@ -660,22 +664,19 @@ export const useAppStore = defineStore('app', () => {
     // 确保配置对象是可序列化的
     const configToSave = JSON.parse(JSON.stringify(appConfig))
 
-    try {
-      // 首先尝试通过 daemon 保存
-      const result = await callDaemon('app set', {
-        pkg,
-        app: configToSave
-      })
-      if (result && result.ok) {
-        appConfigs.value[pkg] = configToSave
-        ksuApi.toast('保存成功')
-        return true
-      }
-    } catch (e) {
-      console.log('Daemon app set failed, trying direct file write:', e)
+    // 首先尝试通过 daemon 保存
+    const result = await callDaemon('app set', {
+      pkg,
+      app: configToSave
+    })
+    if (result && result.ok) {
+      appConfigs.value[pkg] = configToSave
+      ksuApi.toast('保存成功')
+      return true
     }
 
-    // 备用方案：直接写入配置文件
+    // daemon 保存失败，使用备用方案：直接写入配置文件
+    console.log('Daemon app set failed, trying direct file write:', result?.error)
     try {
       const config = await readConfigFile()
       if (!config.apps) {
@@ -687,12 +688,15 @@ export const useAppStore = defineStore('app', () => {
         appConfigs.value[pkg] = configToSave
         ksuApi.toast('保存成功')
         return true
+      } else {
+        ksuApi.toast('保存失败：无法写入配置文件')
+        return false
       }
     } catch (e) {
       console.error('Failed to save app config:', e)
       ksuApi.toast('保存失败: ' + e.message)
+      return false
     }
-    return false
   }
 
   // 保存全局配置
@@ -706,19 +710,16 @@ export const useAppStore = defineStore('app', () => {
       return true
     }
 
-    try {
-      // 首先尝试通过 daemon 保存
-      const result = await callDaemon('global set', { global: configToSave })
-      if (result && result.ok) {
-        globalConfig.value = configToSave
-        ksuApi.toast('保存成功')
-        return true
-      }
-    } catch (e) {
-      console.log('Daemon global set failed, trying direct file write:', e)
+    // 首先尝试通过 daemon 保存
+    const result = await callDaemon('global set', { global: configToSave })
+    if (result && result.ok) {
+      globalConfig.value = configToSave
+      ksuApi.toast('保存成功')
+      return true
     }
 
-    // 备用方案：直接写入配置文件
+    // daemon 保存失败，使用备用方案：直接写入配置文件
+    console.log('Daemon global set failed, trying direct file write:', result?.error)
     try {
       const config = await readConfigFile()
       config.global = configToSave
@@ -727,12 +728,15 @@ export const useAppStore = defineStore('app', () => {
         globalConfig.value = configToSave
         ksuApi.toast('保存成功')
         return true
+      } else {
+        ksuApi.toast('保存失败：无法写入配置文件')
+        return false
       }
     } catch (e) {
       console.error('Failed to save global config:', e)
       ksuApi.toast('保存失败: ' + e.message)
+      return false
     }
-    return false
   }
 
   // 日志目录路径

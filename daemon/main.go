@@ -109,6 +109,12 @@ func (d *Daemon) loadConfig() error {
 }
 
 func (d *Daemon) saveConfig() error {
+	// 确保配置目录存在
+	configDir := filepath.Dir(d.configPath)
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		return fmt.Errorf("failed to create config dir: %w", err)
+	}
+
 	data, err := json.MarshalIndent(d.config, "", "  ")
 	if err != nil {
 		return err
