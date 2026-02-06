@@ -146,8 +146,6 @@
                 <span v-if="app.userId > 0" class="clone-badge">分身</span>
               </div>
               <div class="app-package">{{ app.packageName }}</div>
-              <!-- 未配置规则的应用显示空占位符保持对齐 -->
-              <div class="rule-badges" style="min-height: 22px;"></div>
             </div>
             <div class="app-status" :class="getAppStatusClass(app)">
               <span class="status-indicator"></span>
@@ -493,6 +491,13 @@ watch([currentTab, searchQuery], () => {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   height: calc(100vh - 140px); /* 减去搜索栏和底部空间 */
+  width: 100%;
+}
+
+.apps-container {
+  width: 100%;
+  padding: 0 16px;
+  box-sizing: border-box;
 }
 
 /* 应用卡片加载动画 */

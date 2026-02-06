@@ -604,15 +604,14 @@ const saveConfig = async (fieldToUpdate = null) => {
     // 确保配置结构正确
     ensureConfigStructure()
     
-    // 先重新读取最新配置，避免覆盖其他字段
-    const latestConfig = await appStore.getAppConfig(props.pkg) || {}
-    
     // 创建要保存的配置对象，只包含需要更新的字段
     let configToSave = {}
     
     if (fieldToUpdate) {
       // 只更新指定字段
-      configToSave[fieldToUpdate] = JSON.parse(JSON.stringify(config.value[fieldToUpdate]))
+      const fieldValue = config.value[fieldToUpdate]
+      configToSave[fieldToUpdate] = JSON.parse(JSON.stringify(fieldValue))
+      console.log('saveConfig: saving field:', fieldToUpdate, 'value:', JSON.stringify(configToSave[fieldToUpdate]))
     } else {
       // 更新所有字段（用于开关切换）
       configToSave = {
@@ -621,22 +620,16 @@ const saveConfig = async (fieldToUpdate = null) => {
         readOnlyRules: JSON.parse(JSON.stringify(config.value.readOnlyRules || [])),
         monitorPaths: JSON.parse(JSON.stringify(config.value.monitorPaths || []))
       }
+      console.log('saveConfig: saving all config')
     }
-    
-    console.log('saveConfig: saving field:', fieldToUpdate, 'config:', JSON.stringify(configToSave).substring(0, 200))
     
     const success = await appStore.saveAppConfig(props.pkg, configToSave)
     if (success) {
-      // 保存成功后，重新读取配置以确保同步
-      const refreshedConfig = await appStore.getAppConfig(props.pkg)
-      if (refreshedConfig) {
-        config.value = {
-          enabled: refreshedConfig.enabled || false,
-          redirectRules: refreshedConfig.redirectRules || [],
-          readOnlyRules: refreshedConfig.readOnlyRules || [],
-          monitorPaths: refreshedConfig.monitorPaths || []
-        }
-      }
+      console.log('saveConfig: save successful')
+      // 保存成功，不需要重新读取配置，因为 saveAppConfig 已经合并了配置
+    } else {
+      console.error('saveConfig: save failed')
+      alert('保存失败')
     }
   } catch (e) {
     console.error('Save config failed:', e)
