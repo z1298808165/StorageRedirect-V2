@@ -27,19 +27,19 @@
     </div>
 
     <!-- 加载状态 -->
-    <div v-if="loading.value" class="loading">
+    <div v-if="appStore.loading" class="loading">
       <div class="spinner"></div>
       <span>加载中...</span>
     </div>
 
     <!-- 错误状态和演示数据按钮 -->
-    <div v-else-if="loadError.value || appStore.apps.value.length === 0" class="error-state">
+    <div v-else-if="appStore.loadError || appStore.apps.length === 0" class="error-state">
       <svg class="error-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
         <circle cx="12" cy="12" r="10"/>
         <line x1="12" y1="8" x2="12" y2="12"/>
         <line x1="12" y1="16" x2="12.01" y2="16"/>
       </svg>
-      <p v-if="loadError.value">{{ loadError.value }}</p>
+      <p v-if="appStore.loadError">{{ appStore.loadError }}</p>
       <p v-else>无法加载应用列表</p>
       <p class="hint">当前不在 KernelSU 环境中或 API 不可用</p>
       <button class="demo-btn" @click="loadDemoData">
@@ -53,7 +53,7 @@
     <!-- 应用列表 -->
     <div v-else class="apps-container">
       <!-- 演示模式提示 -->
-      <div v-if="isDemoMode.value" class="demo-banner">
+      <div v-if="appStore.isDemoMode" class="demo-banner">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="12" cy="12" r="10"/>
           <line x1="12" y1="16" x2="12" y2="12"/>
@@ -165,9 +165,7 @@ const tabs = [
 ]
 
 // 注意：不要解构 ref，直接使用 appStore.xxx 保持响应性
-const loading = appStore.loading
-const loadError = appStore.loadError
-const isDemoMode = appStore.isDemoMode
+// 在模板中 Vue 会自动解包 ref，不需要 .value
 
 const filteredApps = computed(() => {
   let result = []
