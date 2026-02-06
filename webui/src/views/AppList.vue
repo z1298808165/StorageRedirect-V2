@@ -114,9 +114,7 @@
       <div v-if="hasMoreWithRules || hasMoreWithoutRules" class="load-more">
         <div v-if="isLoadingMore" class="loading-spinner">
           <div class="spinner small"></div>
-          <span>加载中...</span>
         </div>
-        <span v-else class="load-more-hint">向下滚动加载更多</span>
       </div>
 
       <!-- 其他应用 -->
@@ -148,7 +146,8 @@
                 <span v-if="app.userId > 0" class="clone-badge">分身</span>
               </div>
               <div class="app-package">{{ app.packageName }}</div>
-              <!-- 未配置规则的应用不显示规则徽章 -->
+              <!-- 未配置规则的应用显示空占位符保持对齐 -->
+              <div class="rule-badges" style="min-height: 22px;"></div>
             </div>
             <div class="app-status" :class="getAppStatusClass(app)">
               <span class="status-indicator"></span>
@@ -493,6 +492,23 @@ watch([currentTab, searchQuery], () => {
 .scroll-container {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  height: calc(100vh - 140px); /* 减去搜索栏和底部空间 */
+}
+
+/* 应用卡片加载动画 */
+.app-card {
+  animation: fadeInUp 0.3s ease-out;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .filter-bar {

@@ -495,7 +495,8 @@ const saveRedirectRule = async () => {
   config.value.redirectRules = newRules
 
   closeRedirectModal()
-  await saveConfig()
+  // 只保存 redirectRules 字段
+  await saveConfig('redirectRules')
 }
 
 const confirmDeleteRedirect = (index) => {
@@ -547,7 +548,8 @@ const saveReadonlyRule = async () => {
   config.value.readOnlyRules = newRules
 
   closeReadonlyModal()
-  await saveConfig()
+  // 只保存 readOnlyRules 字段
+  await saveConfig('readOnlyRules')
 }
 
 const confirmDeleteReadonly = (index) => {
@@ -576,38 +578,65 @@ const executeDelete = async () => {
     config.value.readOnlyRules = newRules
   }
   closeDeleteModal()
-  await saveConfig()
+  // 根据删除的类型只保存对应字段
+  await saveConfig(deleteType.value === 'redirect' ? 'redirectRules' : 'readOnlyRules')
 }
 
 const moveRule = (type, index, direction) => {
-  const rules = type === 'redirect' ? [...config.value.redirectRules] : []
+  const rules = type === 'redirect' ? [...config.value.redirectRules] : [...config.value.readOnlyRules]
   const newIndex = index + direction
   if (newIndex >= 0 && newIndex < rules.length) {
     const temp = rules[index]
     rules[index] = rules[newIndex]
     rules[newIndex] = temp
-    config.value.redirectRules = rules
-    saveConfig()
+    if (type === 'redirect') {
+      config.value.redirectRules = rules
+      saveConfig('redirectRules')
+    } else {
+      config.value.readOnlyRules = rules
+      saveConfig('readOnlyRules')
+    }
   }
 }
 
-const saveConfig = async () => {
+const saveConfig = async (fieldToUpdate = null) => {
   try {
     // 确保配置结构正确
     ensureConfigStructure()
-    // 创建要保存的配置对象副本
-    const configToSave = {
-      enabled: config.value.enabled,
-      redirectRules: [...(config.value.redirectRules || [])],
-      readOnlyRules: [...(config.value.readOnlyRules || [])],
-      monitorPaths: [...(config.value.monitorPaths || [])]
+    
+    // 先重新读取最新配置，避免覆盖其他字段
+    const latestConfig = await appStore.getAppConfig(props.pkg) || {}
+    
+    // 创建要保存的配置对象，只包含需要更新的字段
+    let configToSave = {}
+    
+    if (fieldToUpdate) {
+      // 只更新指定字段
+      configToSave[fieldToUpdate] = JSON.parse(JSON.stringify(config.value[fieldToUpdate]))
+    } else {
+      // 更新所有字段（用于开关切换）
+      configToSave = {
+        enabled: config.value.enabled,
+        redirectRules: JSON.parse(JSON.stringify(config.value.redirectRules || [])),
+        readOnlyRules: JSON.parse(JSON.stringify(config.value.readOnlyRules || [])),
+        monitorPaths: JSON.parse(JSON.stringify(config.value.monitorPaths || []))
+      }
     }
+    
+    console.log('saveConfig: saving field:', fieldToUpdate, 'config:', JSON.stringify(configToSave).substring(0, 200))
+    
     const success = await appStore.saveAppConfig(props.pkg, configToSave)
     if (success) {
-      // 保存成功后更新本地配置
-      config.value = { ...config.value, ...configToSave }
-      // 更新 store 中的配置缓存
-      appStore.appConfigs[props.pkg] = { ...configToSave }
+      // 保存成功后，重新读取配置以确保同步
+      const refreshedConfig = await appStore.getAppConfig(props.pkg)
+      if (refreshedConfig) {
+        config.value = {
+          enabled: refreshedConfig.enabled || false,
+          redirectRules: refreshedConfig.redirectRules || [],
+          readOnlyRules: refreshedConfig.readOnlyRules || [],
+          monitorPaths: refreshedConfig.monitorPaths || []
+        }
+      }
     }
   } catch (e) {
     console.error('Save config failed:', e)
