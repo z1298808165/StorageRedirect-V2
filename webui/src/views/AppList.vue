@@ -171,8 +171,8 @@ const filteredApps = computed(() => {
   let result = []
 
   // 从所有应用开始筛选 - 确保 apps 是数组
-  // 注意：在 computed 中需要 .value 来访问 ref 的值
-  const appsList = appStore.apps?.value || []
+  // Pinia store 中的 ref 会被自动解包，直接访问即可
+  const appsList = appStore.apps || []
   result = [...appsList]
 
   // 先按用户/系统筛选
@@ -209,7 +209,7 @@ const filteredAppsWithRules = computed(() => {
     return filteredApps.value
   }
   return filteredApps.value.filter(app => {
-    const config = appStore.appConfigs?.value?.[app.packageName]
+    const config = appStore.appConfigs?.[app.packageName]
     return config && (config.enabled ||
       (config.redirectRules?.length > 0) ||
       (config.readOnlyRules?.length > 0))
@@ -220,7 +220,7 @@ const filteredAppsWithoutRules = computed(() => {
   if (currentTab.value === 'configured') return []
   // 从已过滤的应用列表中筛选出无规则的应用
   return filteredApps.value.filter(app => {
-    const config = appStore.appConfigs?.value?.[app.packageName]
+    const config = appStore.appConfigs?.[app.packageName]
     return !config || (!config.enabled &&
       (!config.redirectRules || config.redirectRules.length === 0) &&
       (!config.readOnlyRules || config.readOnlyRules.length === 0))
@@ -232,7 +232,7 @@ const getAppIconUrl = (pkg) => {
 }
 
 const getRuleCount = (app) => {
-  const config = appStore.appConfigs?.value?.[app.packageName]
+  const config = appStore.appConfigs?.[app.packageName]
   if (!config) return { redirect: 0, readOnly: 0 }
   return {
     redirect: config.redirectRules?.length || 0,
@@ -241,14 +241,14 @@ const getRuleCount = (app) => {
 }
 
 const isEnabled = (app) => {
-  const config = appStore.appConfigs?.value?.[app.packageName]
+  const config = appStore.appConfigs?.[app.packageName]
   return config?.enabled || false
 }
 
 // 获取应用状态样式类
 // running: 运行中(绿色), stopped: 未运行(灰色), error: 挂载失败(红色)
 const getAppStatusClass = (app) => {
-  const config = appStore.appConfigs?.value?.[app.packageName]
+  const config = appStore.appConfigs?.[app.packageName]
   if (!config || !config.enabled) {
     return 'stopped'
   }
@@ -285,9 +285,10 @@ const waitForKsuApi = async (maxRetries = 20, interval = 500) => {
     try {
       const initSuccess = await appStore.ksuApi.init()
       console.log('[AppList] ksuApi.init() result:', initSuccess)
-      console.log('[AppList] ksuApi.isAvailable():', appStore.ksuApi.isAvailable())
+      const available = await appStore.ksuApi.isAvailable()
+      console.log('[AppList] ksuApi.isAvailable():', available)
 
-      if (appStore.ksuApi.isAvailable()) {
+      if (available) {
         console.log('[AppList] KernelSU API is available!')
         return true
       }
@@ -304,10 +305,10 @@ const waitForKsuApi = async (maxRetries = 20, interval = 500) => {
 
 onMounted(async () => {
   console.log('[AppList] Component mounted')
-  console.log('[AppList] Initial apps count:', appStore.apps.value.length)
+  console.log('[AppList] Initial apps count:', appStore.apps.length)
 
   // 如果已经加载过数据，直接返回
-  if (appStore.apps.value.length > 0) {
+  if (appStore.apps.length > 0) {
     console.log('[AppList] Apps already loaded, skipping')
     return
   }
@@ -332,7 +333,7 @@ onMounted(async () => {
       console.log('[AppList] Real apps loaded successfully')
       await appStore.loadAppConfigs()
       // 加载成功后，退出演示模式
-      appStore.isDemoMode.value = false
+      appStore.isDemoMode = false
       console.log('[AppList] Demo mode disabled')
     } else {
       console.log('[AppList] Failed to load real apps, loading demo data')
