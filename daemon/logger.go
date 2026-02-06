@@ -42,16 +42,11 @@ type MapInfo struct {
 // Logger 日志管理器
 type Logger struct {
 	baseDir      string
+	logFile      string
 	maxSizeBytes int64
 	mu           sync.Mutex
-	buffers      map[string]*logBuffer
-}
-
-type logBuffer struct {
-	pkg       string
-	entries   []LogEntry
-	lastFlush time.Time
-	mu        sync.Mutex
+	buffer       []LogEntry
+	lastFlush    time.Time
 }
 
 // NewLogger 创建日志管理器
@@ -60,10 +55,15 @@ func NewLogger(baseDir string) (*Logger, error) {
 		return nil, err
 	}
 
+	// 统一日志文件路径
+	logFile := filepath.Join(baseDir, "access.log")
+
 	return &Logger{
 		baseDir:      baseDir,
+		logFile:      logFile,
 		maxSizeBytes: 64 * 1024 * 1024, // 默认64MB
-		buffers:      make(map[string]*logBuffer),
+		buffer:       make([]LogEntry, 0, 100),
+		lastFlush:    time.Now(),
 	}, nil
 }
 
@@ -80,90 +80,42 @@ func (l *Logger) Write(entry *LogEntry) error {
 		entry.Ts = time.Now().UnixMilli()
 	}
 
-	pkg := entry.Pkg
-	if pkg == "" {
-		pkg = "unknown"
-	}
-
 	l.mu.Lock()
-	buf, ok := l.buffers[pkg]
-	if !ok {
-		buf = &logBuffer{
-			pkg:       pkg,
-			entries:   make([]LogEntry, 0, 100),
-			lastFlush: time.Now(),
-		}
-		l.buffers[pkg] = buf
-	}
+	l.buffer = append(l.buffer, *entry)
+	shouldFlush := len(l.buffer) >= 100 || time.Since(l.lastFlush) > 5*time.Second
 	l.mu.Unlock()
-
-	buf.mu.Lock()
-	buf.entries = append(buf.entries, *entry)
-	shouldFlush := len(buf.entries) >= 100 || time.Since(buf.lastFlush) > 5*time.Second
-	buf.mu.Unlock()
 
 	if shouldFlush {
-		return l.Flush(pkg)
+		return l.Flush()
 	}
 
 	return nil
 }
 
-// Flush 刷新指定包的日志
-func (l *Logger) Flush(pkg string) error {
+// Flush 刷新日志到文件
+func (l *Logger) Flush() error {
 	l.mu.Lock()
-	buf, ok := l.buffers[pkg]
+	if len(l.buffer) == 0 {
+		l.mu.Unlock()
+		return nil
+	}
+
+	entries := make([]LogEntry, len(l.buffer))
+	copy(entries, l.buffer)
+	l.buffer = l.buffer[:0]
+	l.lastFlush = time.Now()
 	l.mu.Unlock()
 
-	if !ok {
-		return nil
-	}
-
-	buf.mu.Lock()
-	if len(buf.entries) == 0 {
-		buf.mu.Unlock()
-		return nil
-	}
-
-	entries := make([]LogEntry, len(buf.entries))
-	copy(entries, buf.entries)
-	buf.entries = buf.entries[:0]
-	buf.lastFlush = time.Now()
-	buf.mu.Unlock()
-
-	return l.writeToFile(pkg, entries)
+	return l.writeToFile(entries)
 }
 
-// FlushAll 刷新所有日志
+// FlushAll 刷新所有日志（兼容旧接口）
 func (l *Logger) FlushAll() error {
-	l.mu.Lock()
-	pkgs := make([]string, 0, len(l.buffers))
-	for pkg := range l.buffers {
-		pkgs = append(pkgs, pkg)
-	}
-	l.mu.Unlock()
-
-	for _, pkg := range pkgs {
-		if err := l.Flush(pkg); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return l.Flush()
 }
 
-func (l *Logger) writeToFile(pkg string, entries []LogEntry) error {
-	// 创建应用日志目录
-	appDir := filepath.Join(l.baseDir, pkg)
-	if err := os.MkdirAll(appDir, 0755); err != nil {
-		return err
-	}
-
-	// 按日期命名文件
-	dateStr := time.Now().Format("2006-01-02")
-	filePath := filepath.Join(appDir, dateStr+".jsonl")
-
-	f, err := os.OpenFile(filePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+func (l *Logger) writeToFile(entries []LogEntry) error {
+	f, err := os.OpenFile(l.logFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
 		return err
 	}
@@ -185,76 +137,66 @@ func (l *Logger) writeToFile(pkg string, entries []LogEntry) error {
 // Query 查询日志
 func (l *Logger) Query(pkg string, from, to int64, ops []string, contains string, limit, offset int) ([]LogEntry, int, error) {
 	// 先刷新缓冲区
-	l.Flush(pkg)
-
-	appDir := filepath.Join(l.baseDir, pkg)
-	if _, err := os.Stat(appDir); os.IsNotExist(err) {
-		return []LogEntry{}, 0, nil
-	}
+	l.Flush()
 
 	var allEntries []LogEntry
 
-	// 读取所有日志文件
-	err := filepath.Walk(appDir, func(path string, info os.FileInfo, err error) error {
+	// 读取统一日志文件
+	if _, err := os.Stat(l.logFile); !os.IsNotExist(err) {
+		entries, err := l.readLogFile(l.logFile)
 		if err != nil {
-			return err
+			return nil, 0, err
 		}
-		if info.IsDir() || !strings.HasSuffix(path, ".jsonl") {
-			return nil
-		}
-
-		entries, err := l.readLogFile(path)
-		if err != nil {
-			return err
-		}
-
-		for _, entry := range entries {
-			// 时间过滤
-			if from > 0 && entry.Ts < from {
-				continue
-			}
-			if to > 0 && entry.Ts > to {
-				continue
-			}
-
-			// 操作类型过滤
-			if len(ops) > 0 {
-				found := false
-				for _, op := range ops {
-					if entry.Op == op {
-						found = true
-						break
-					}
-				}
-				if !found {
-					continue
-				}
-			}
-
-			// 内容过滤
-			if contains != "" {
-				data, _ := json.Marshal(entry)
-				if !strings.Contains(string(data), contains) {
-					continue
-				}
-			}
-
-			allEntries = append(allEntries, entry)
-		}
-
-		return nil
-	})
-
-	if err != nil {
-		return nil, 0, err
+		allEntries = append(allEntries, entries...)
 	}
 
-	// 按时间排序
-	sort.Slice(allEntries, func(i, j int) bool {
-		return allEntries[i].Ts > allEntries[j].Ts // 降序
+	// 过滤
+	var filtered []LogEntry
+	for _, entry := range allEntries {
+		// 包名过滤
+		if pkg != "" && entry.Pkg != pkg {
+			continue
+		}
+
+		// 时间过滤
+		if from > 0 && entry.Ts < from {
+			continue
+		}
+		if to > 0 && entry.Ts > to {
+			continue
+		}
+
+		// 操作类型过滤
+		if len(ops) > 0 {
+			found := false
+			for _, op := range ops {
+				if entry.Op == op {
+					found = true
+					break
+				}
+			}
+			if !found {
+				continue
+			}
+		}
+
+		// 内容过滤
+		if contains != "" {
+			data, _ := json.Marshal(entry)
+			if !strings.Contains(string(data), contains) {
+				continue
+			}
+		}
+
+		filtered = append(filtered, entry)
+	}
+
+	// 按时间排序（降序）
+	sort.Slice(filtered, func(i, j int) bool {
+		return filtered[i].Ts > filtered[j].Ts
 	})
 
-	total := len(allEntries)
+	total := len(filtered)
 
 	// 分页
 	if offset >= total {
@@ -266,7 +208,7 @@ func (l *Logger) Query(pkg string, from, to int64, ops []string, contains string
 		end = total
 	}
 
-	return allEntries[offset:end], total, nil
+	return filtered[offset:end], total, nil
 }
 
 func (l *Logger) readLogFile(path string) ([]LogEntry, error) {
@@ -297,45 +239,33 @@ func (l *Logger) readLogFile(path string) ([]LogEntry, error) {
 // Tail 获取最近的日志
 func (l *Logger) Tail(pkg string, n int) ([]LogEntry, error) {
 	// 先刷新缓冲区
-	l.Flush(pkg)
+	l.Flush()
 
-	appDir := filepath.Join(l.baseDir, pkg)
-	if _, err := os.Stat(appDir); os.IsNotExist(err) {
+	// 读取统一日志文件
+	if _, err := os.Stat(l.logFile); os.IsNotExist(err) {
 		return []LogEntry{}, nil
 	}
 
-	// 获取所有日志文件并按名称排序（日期）
-	files, err := os.ReadDir(appDir)
+	entries, err := l.readLogFile(l.logFile)
 	if err != nil {
 		return nil, err
 	}
 
-	var logFiles []string
-	for _, f := range files {
-		if !f.IsDir() && strings.HasSuffix(f.Name(), ".jsonl") {
-			logFiles = append(logFiles, filepath.Join(appDir, f.Name()))
+	// 如果指定了包名，进行过滤
+	if pkg != "" {
+		var filtered []LogEntry
+		for _, entry := range entries {
+			if entry.Pkg == pkg {
+				filtered = append(filtered, entry)
+			}
 		}
+		entries = filtered
 	}
-	sort.Sort(sort.Reverse(sort.StringSlice(logFiles)))
 
-	var entries []LogEntry
-	for _, path := range logFiles {
-		fileEntries, err := l.readLogFile(path)
-		if err != nil {
-			continue
-		}
-
-		// 按时间降序
-		sort.Slice(fileEntries, func(i, j int) bool {
-			return fileEntries[i].Ts > fileEntries[j].Ts
-		})
-
-		entries = append(entries, fileEntries...)
-
-		if len(entries) >= n {
-			break
-		}
-	}
+	// 按时间降序排序
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].Ts > entries[j].Ts
+	})
 
 	if len(entries) > n {
 		entries = entries[:n]
@@ -344,106 +274,149 @@ func (l *Logger) Tail(pkg string, n int) ([]LogEntry, error) {
 	return entries, nil
 }
 
-// Clear 清空应用日志
+// Clear 清空日志
 func (l *Logger) Clear(pkg string) error {
-	// 清空缓冲区
 	l.mu.Lock()
-	if buf, ok := l.buffers[pkg]; ok {
-		buf.mu.Lock()
-		buf.entries = buf.entries[:0]
-		buf.mu.Unlock()
+	// 清空缓冲区
+	if pkg == "" {
+		// 清空所有
+		l.buffer = l.buffer[:0]
+	} else {
+		// 只保留其他包的日志
+		var newBuffer []LogEntry
+		for _, entry := range l.buffer {
+			if entry.Pkg != pkg {
+				newBuffer = append(newBuffer, entry)
+			}
+		}
+		l.buffer = newBuffer
 	}
 	l.mu.Unlock()
 
-	// 删除日志文件
-	appDir := filepath.Join(l.baseDir, pkg)
-	if err := os.RemoveAll(appDir); err != nil {
+	// 清空文件
+	if pkg == "" {
+		// 清空所有日志
+		return os.RemoveAll(l.logFile)
+	}
+
+	// 读取并过滤，然后写回
+	entries, err := l.readLogFile(l.logFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
 		return err
 	}
 
-	return nil
+	var filtered []LogEntry
+	for _, entry := range entries {
+		if entry.Pkg != pkg {
+			filtered = append(filtered, entry)
+		}
+	}
+
+	// 写回文件
+	tmpFile := l.logFile + ".tmp"
+	f, err := os.OpenFile(tmpFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		return err
+	}
+
+	w := bufio.NewWriter(f)
+	for _, entry := range filtered {
+		data, err := json.Marshal(entry)
+		if err != nil {
+			continue
+		}
+		w.Write(data)
+		w.WriteByte('\n')
+	}
+	w.Flush()
+	f.Close()
+
+	return os.Rename(tmpFile, l.logFile)
 }
 
 // Cleanup 清理超过大小限制的日志
 func (l *Logger) Cleanup() error {
 	// 先刷新所有日志
-	l.FlushAll()
+	l.Flush()
 
-	// 计算总大小
-	var totalSize int64
-	var files []os.FileInfo
-	var paths []string
+	// 获取文件信息
+	info, err := os.Stat(l.logFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
 
-	err := filepath.Walk(l.baseDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if !info.IsDir() && strings.HasSuffix(path, ".jsonl") {
-			totalSize += info.Size()
-			files = append(files, info)
-			paths = append(paths, path)
-		}
+	if info.Size() <= l.maxSizeBytes {
 		return nil
-	})
+	}
 
+	// 读取所有日志
+	entries, err := l.readLogFile(l.logFile)
 	if err != nil {
 		return err
 	}
 
-	if totalSize <= l.maxSizeBytes {
-		return nil
-	}
-
-	// 按修改时间排序
-	type fileInfo struct {
-		path string
-		info os.FileInfo
-	}
-	var fileInfos []fileInfo
-	for i, f := range files {
-		fileInfos = append(fileInfos, fileInfo{path: paths[i], info: f})
-	}
-	sort.Slice(fileInfos, func(i, j int) bool {
-		return fileInfos[i].info.ModTime().Before(fileInfos[j].info.ModTime())
+	// 按时间排序
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].Ts < entries[j].Ts
 	})
 
-	// 删除最旧的文件直到满足限制
-	for _, fi := range fileInfos {
-		if totalSize <= l.maxSizeBytes {
-			break
-		}
-		os.Remove(fi.path)
-		totalSize -= fi.info.Size()
+	// 删除最旧的日志直到满足限制（保留最新的 80%）
+	keepCount := int(float64(len(entries)) * 0.8)
+	if keepCount < 100 {
+		keepCount = 100
+	}
+	entries = entries[len(entries)-keepCount:]
+
+	// 写回文件
+	tmpFile := l.logFile + ".tmp"
+	f, err := os.OpenFile(tmpFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		return err
 	}
 
-	return nil
+	w := bufio.NewWriter(f)
+	for _, entry := range entries {
+		data, err := json.Marshal(entry)
+		if err != nil {
+			continue
+		}
+		w.Write(data)
+		w.WriteByte('\n')
+	}
+	w.Flush()
+	f.Close()
+
+	return os.Rename(tmpFile, l.logFile)
 }
 
 // GetStats 获取日志统计
 func (l *Logger) GetStats() map[string]interface{} {
-	l.FlushAll()
+	l.Flush()
 
-	var totalSize int64
+	info, err := os.Stat(l.logFile)
+	if err != nil {
+		return map[string]interface{}{
+			"totalSizeBytes": 0,
+			"maxSizeBytes":   l.maxSizeBytes,
+			"appCount":       0,
+		}
+	}
+
+	// 统计应用数量
+	entries, _ := l.readLogFile(l.logFile)
 	appCount := make(map[string]bool)
-
-	filepath.Walk(l.baseDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return nil
-		}
-		if !info.IsDir() && strings.HasSuffix(path, ".jsonl") {
-			totalSize += info.Size()
-			// 获取应用名（父目录名）
-			rel, _ := filepath.Rel(l.baseDir, path)
-			parts := strings.Split(rel, string(filepath.Separator))
-			if len(parts) > 0 {
-				appCount[parts[0]] = true
-			}
-		}
-		return nil
-	})
+	for _, entry := range entries {
+		appCount[entry.Pkg] = true
+	}
 
 	return map[string]interface{}{
-		"totalSizeBytes": totalSize,
+		"totalSizeBytes": info.Size(),
 		"maxSizeBytes":   l.maxSizeBytes,
 		"appCount":       len(appCount),
 	}
@@ -451,7 +424,7 @@ func (l *Logger) GetStats() map[string]interface{} {
 
 // Close 关闭日志管理器
 func (l *Logger) Close() error {
-	return l.FlushAll()
+	return l.Flush()
 }
 
 // Printf 打印日志（用于daemon自身日志）

@@ -754,34 +754,28 @@ export const useAppStore = defineStore('app', () => {
       console.log('Daemon log tail failed, trying direct file read:', e)
     }
 
-    // 备用方案：直接读取日志文件（.jsonl 格式）
+    // 备用方案：直接读取统一日志文件
     try {
-      // 日志存储在 logs/<pkg>/<date>.jsonl 文件中
-      const appLogDir = `${LOG_DIR}/${pkg}`
-      const result = await ksuApi.exec(`ls -1 ${appLogDir}/*.jsonl 2>/dev/null | head -5`)
+      const logFile = `${LOG_DIR}/access.log`
+      const result = await ksuApi.exec(`cat "${logFile}" 2>/dev/null`)
       if (result && result.stdout) {
-        const logFiles = result.stdout.trim().split('\n').filter(f => f)
-        if (logFiles.length > 0) {
-          // 读取最新的日志文件
-          const latestLogFile = logFiles[logFiles.length - 1]
-          const catResult = await ksuApi.exec(`cat "${latestLogFile}" 2>/dev/null`)
-          if (catResult && catResult.stdout) {
-            // 解析 .jsonl 格式（每行一个 JSON 对象）
-            const lines = catResult.stdout.trim().split('\n').filter(line => line)
-            const entries = []
-            for (const line of lines) {
-              try {
-                const entry = JSON.parse(line)
-                entries.push(entry)
-              } catch (e) {
-                // 跳过损坏的行
-              }
+        // 解析 .jsonl 格式（每行一个 JSON 对象）
+        const lines = result.stdout.trim().split('\n').filter(line => line)
+        const entries = []
+        for (const line of lines) {
+          try {
+            const entry = JSON.parse(line)
+            // 如果指定了包名，进行过滤
+            if (!pkg || entry.pkg === pkg) {
+              entries.push(entry)
             }
-            // 按时间排序并返回最新的 n 条
-            entries.sort((a, b) => (b.ts || 0) - (a.ts || 0))
-            return entries.slice(0, n)
+          } catch (e) {
+            // 跳过损坏的行
           }
         }
+        // 按时间排序并返回最新的 n 条
+        entries.sort((a, b) => (b.ts || 0) - (a.ts || 0))
+        return entries.slice(0, n)
       }
     } catch (e) {
       console.error('Failed to get logs from file:', e)
@@ -814,21 +808,35 @@ export const useAppStore = defineStore('app', () => {
       console.log('Daemon log clear failed, trying direct file delete:', e)
     }
 
-    // 备用方案：直接删除日志文件或清空内容
+    // 备用方案：直接操作统一日志文件
     try {
-      const logFile = `${LOG_DIR}/${pkg}.log`
-      // 先检查文件是否存在
-      const checkResult = await ksuApi.exec(`test -f ${logFile} && echo 'exists' || echo 'not found'`)
-      if (checkResult && checkResult.stdout && checkResult.stdout.includes('exists')) {
-        // 文件存在，清空内容（保留文件）
-        const result = await ksuApi.exec(`echo '[]' > ${logFile}`)
+      const logFile = `${LOG_DIR}/access.log`
+      // 读取并过滤掉指定包的日志
+      const catResult = await ksuApi.exec(`cat "${logFile}" 2>/dev/null`)
+      if (catResult && catResult.stdout) {
+        const lines = catResult.stdout.trim().split('\n').filter(line => line)
+        const remainingLines = []
+        for (const line of lines) {
+          try {
+            const entry = JSON.parse(line)
+            if (entry.pkg !== pkg) {
+              remainingLines.push(line)
+            }
+          } catch (e) {
+            // 保留无法解析的行
+            remainingLines.push(line)
+          }
+        }
+        // 写回文件
+        const newContent = remainingLines.join('\n')
+        const base64Content = btoa(newContent)
+        const result = await ksuApi.exec(`echo "${base64Content}" | base64 -d > "${logFile}"`)
         if (result && result.errno === 0) {
           ksuApi.toast('日志已清空')
           return true
         }
       } else {
-        // 文件不存在，视为成功（没有日志需要清空）
-        console.log('Log file does not exist, nothing to clear')
+        // 文件不存在或为空，视为成功
         return true
       }
     } catch (e) {
