@@ -357,12 +357,6 @@ onMounted(async () => {
   console.log('[AppList] Component mounted')
   console.log('[AppList] Initial apps count:', appStore.apps.length)
 
-  // 如果已经加载过数据，直接返回
-  if (appStore.apps.length > 0) {
-    console.log('[AppList] Apps already loaded, skipping')
-    return
-  }
-
   // 等待 KernelSU API 注入完成
   console.log('[AppList] Waiting for KernelSU API...')
   const apiAvailable = await waitForKsuApi()
@@ -370,26 +364,31 @@ onMounted(async () => {
   if (!apiAvailable) {
     console.log('[AppList] KernelSU API not available, auto loading demo data')
     // API 不可用，自动加载演示数据
-    appStore.loadDemoData()
+    if (appStore.apps.length === 0) {
+      appStore.loadDemoData()
+    }
     return
   }
 
   // API 可用，尝试加载真实数据
   console.log('[AppList] KernelSU API available, loading real apps...')
   try {
+    // 无论是否已加载，都重新加载应用列表和配置
     const success = await appStore.loadApps('all')
     console.log('[AppList] loadApps result:', success)
     if (success) {
       console.log('[AppList] Real apps loaded successfully')
       await appStore.loadAppConfigs()
-      console.log('[AppList] App configs loaded')
-    } else {
+      console.log('[AppList] App configs loaded, count:', Object.keys(appStore.appConfigs?.value || {}).length)
+    } else if (appStore.apps.length === 0) {
       console.log('[AppList] Failed to load real apps, loading demo data')
       appStore.loadDemoData()
     }
   } catch (e) {
-    console.error('[AppList] Failed to load real apps, loading demo data:', e)
-    appStore.loadDemoData()
+    console.error('[AppList] Failed to load real apps:', e)
+    if (appStore.apps.length === 0) {
+      appStore.loadDemoData()
+    }
   }
 
   // 初始化 Intersection Observer
@@ -504,9 +503,13 @@ watch([currentTab, searchQuery], () => {
   box-sizing: border-box;
 }
 
+.app-section {
+  width: 100%;
+}
+
 .app-grid {
-  display: grid;
-  grid-template-columns: 1fr;
+  display: flex;
+  flex-direction: column;
   gap: 12px;
   width: 100%;
 }

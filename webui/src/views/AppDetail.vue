@@ -357,7 +357,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAppStore } from '../stores/app'
 
@@ -495,6 +495,11 @@ const saveRedirectRule = async () => {
   config.value.redirectRules = newRules
 
   closeRedirectModal()
+  
+  // 等待响应式更新完成后再保存
+  await nextTick()
+  console.log('saveRedirectRule: after nextTick, redirectRules:', JSON.stringify(config.value.redirectRules))
+  
   // 只保存 redirectRules 字段
   await saveConfig('redirectRules')
 }
@@ -538,11 +543,8 @@ const saveReadonlyRule = async () => {
     return
   }
 
-  console.log('saveReadonlyRule: before update, readOnlyRules:', JSON.stringify(config.value.readOnlyRules))
-  
   // 创建新的规则数组以确保响应式更新
   const newRules = [...config.value.readOnlyRules]
-  console.log('saveReadonlyRule: copied rules:', JSON.stringify(newRules))
   
   if (editingReadonlyIndex.value !== null) {
     newRules[editingReadonlyIndex.value] = { path }
@@ -550,13 +552,14 @@ const saveReadonlyRule = async () => {
     newRules.push({ path })
   }
   
-  console.log('saveReadonlyRule: after push, newRules:', JSON.stringify(newRules))
-  
   config.value.readOnlyRules = newRules
-  
-  console.log('saveReadonlyRule: after update config, readOnlyRules:', JSON.stringify(config.value.readOnlyRules))
 
   closeReadonlyModal()
+  
+  // 等待响应式更新完成后再保存
+  await nextTick()
+  console.log('saveReadonlyRule: after nextTick, readOnlyRules:', JSON.stringify(config.value.readOnlyRules))
+  
   // 只保存 readOnlyRules 字段
   await saveConfig('readOnlyRules')
 }
