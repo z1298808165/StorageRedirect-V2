@@ -85,8 +85,8 @@ func main() {
 		os.Exit(getExitCode(resp.Error.Code))
 	}
 
-	// 输出结果
-	output, _ := json.MarshalIndent(resp.Data, "", "  ")
+	// 输出结果 - 输出完整的响应对象，包含 ok 和 data 字段
+	output, _ := json.MarshalIndent(resp, "", "  ")
 	fmt.Println(string(output))
 }
 
