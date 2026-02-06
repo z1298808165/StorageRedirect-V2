@@ -424,6 +424,11 @@ export const useAppStore = defineStore('app', () => {
     }
   }
 
+  // 检测是否在 KernelSU WebView 环境中
+  const isInKsuWebView = () => {
+    return typeof window.kernelsu !== 'undefined' && window.kernelsu !== null
+  }
+
   // 加载应用列表 - 参考示例实现，分别获取用户应用和系统应用
   const loadApps = async (type = 'all') => {
     loading.value = true
@@ -431,6 +436,14 @@ export const useAppStore = defineStore('app', () => {
 
     try {
       console.log('[store] Loading apps...')
+      console.log('[store] Checking if in KernelSU WebView...')
+      
+      // 首先检测是否在 KernelSU WebView 环境中
+      if (!isInKsuWebView()) {
+        console.warn('[store] Not running in KernelSU WebView, switching to demo mode')
+        loadDemoData()
+        return true
+      }
 
       // 首先初始化 KernelSU API
       console.log('[store] Initializing KernelSU API...')
@@ -830,6 +843,14 @@ export const useAppStore = defineStore('app', () => {
 
   // 检查 Daemon 状态
   const checkDaemon = async () => {
+    // 如果不在 KernelSU WebView 中，自动进入演示模式
+    if (!isInKsuWebView()) {
+      console.warn('[checkDaemon] Not in KernelSU WebView, switching to demo mode')
+      isDemoMode.value = true
+      daemonStatus.value = { online: true, version: '1.0.0-demo' }
+      return true
+    }
+    
     if (isDemoMode.value) {
       daemonStatus.value = { online: true, version: '1.0.0-demo' }
       return true
