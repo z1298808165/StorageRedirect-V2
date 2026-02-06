@@ -75,9 +75,16 @@ const ksuApi = {
 
   // 检查 API 是否可用
   isAvailable: () => {
-    const available = ksuModuleLoaded && ksuApis.listPackages !== null && ksuApis.getPackagesInfo !== null
-    console.log('[ksuApi] isAvailable check:', { ksuModuleLoaded, listPackages: typeof ksuApis.listPackages, getPackagesInfo: typeof ksuApis.getPackagesInfo, available })
-    return available
+    // 实际调用 listPackages 来测试 API 是否真正可用
+    try {
+      const testResult = listPackages('user')
+      const available = Array.isArray(testResult)
+      console.log('[ksuApi] isAvailable check:', { available, testResultType: typeof testResult, isArray: Array.isArray(testResult), resultLength: testResult?.length })
+      return available
+    } catch (e) {
+      console.error('[ksuApi] isAvailable check failed:', e)
+      return false
+    }
   },
 
   // 执行命令 - 使用导入的 exec 函数
