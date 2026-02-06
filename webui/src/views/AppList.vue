@@ -352,9 +352,7 @@ onMounted(async () => {
     if (success) {
       console.log('[AppList] Real apps loaded successfully')
       await appStore.loadAppConfigs()
-      // 加载成功后，退出演示模式
-      appStore.isDemoMode = false
-      console.log('[AppList] Demo mode disabled')
+      console.log('[AppList] App configs loaded')
     } else {
       console.log('[AppList] Failed to load real apps, loading demo data')
       appStore.loadDemoData()

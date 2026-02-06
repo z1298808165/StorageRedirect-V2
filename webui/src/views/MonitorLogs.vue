@@ -119,7 +119,7 @@ import { useAppStore } from '../stores/app'
 const router = useRouter()
 const appStore = useAppStore()
 
-const isDemoMode = ref(false)
+const isDemoMode = computed(() => appStore.isDemoMode)
 const logs = ref([])
 const monitorPaths = ref([])
 const searchQuery = ref('')
@@ -262,6 +262,12 @@ const executeClear = async () => {
 }
 
 const loadLogs = async () => {
+  // 首先检查是否在演示模式
+  if (appStore.isDemoMode) {
+    logs.value = demoLogs
+    return
+  }
+
   try {
     // Try to load real logs from daemon
     const result = await appStore.callDaemon('log stats')
@@ -296,38 +302,15 @@ const loadLogs = async () => {
       // Sort by timestamp desc
       allLogs.sort((a, b) => b.timestamp.localeCompare(a.timestamp))
 
-      if (allLogs.length > 0) {
-        logs.value = allLogs
-        isDemoMode.value = false
-        return
-      }
+      logs.value = allLogs
+      return
     }
   } catch (e) {
     console.error('Failed to load logs from daemon:', e)
   }
 
-  // Fallback: try to load from file directly
-  try {
-    const result = await appStore.exec('cat /data/adb/modules/StorageRedirect/logs/access.log 2>/dev/null || echo "[]"')
-    if (result && result.stdout && result.stdout !== '[]') {
-      try {
-        const parsed = JSON.parse(result.stdout)
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          logs.value = parsed
-          isDemoMode.value = false
-          return
-        }
-      } catch (e) {
-        // Parse error
-      }
-    }
-  } catch (e) {
-    // Error loading from file
-  }
-
-  // Use demo data as final fallback
-  logs.value = demoLogs
-  isDemoMode.value = true
+  // Daemon 不可用，显示空日志（不是演示数据）
+  logs.value = []
 }
 
 const formatTimestamp = (ts) => {
@@ -343,6 +326,12 @@ const formatTimestamp = (ts) => {
 }
 
 const loadMonitorPaths = async () => {
+  // 如果处于演示模式，使用演示数据
+  if (appStore.isDemoMode) {
+    monitorPaths.value = demoMonitorPaths
+    return
+  }
+
   try {
     // Try to load from store first
     await appStore.loadGlobalConfig()
@@ -377,8 +366,8 @@ const loadMonitorPaths = async () => {
     // Error loading from file
   }
 
-  // Use demo data as fallback
-  monitorPaths.value = demoMonitorPaths
+  // 正式环境下显示空列表
+  monitorPaths.value = []
 }
 
 onMounted(async () => {

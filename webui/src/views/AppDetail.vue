@@ -605,6 +605,12 @@ const saveConfig = async () => {
 }
 
 const loadLogs = async () => {
+  // 如果处于演示模式，显示空日志而不是错误
+  if (appStore.isDemoMode) {
+    logs.value = []
+    return
+  }
+
   try {
     const appLogs = await appStore.getAppLogs(props.pkg, 50)
     if (Array.isArray(appLogs)) {

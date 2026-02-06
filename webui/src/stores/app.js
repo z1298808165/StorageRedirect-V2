@@ -303,9 +303,9 @@ export const useAppStore = defineStore('app', () => {
       case 'app set':
         // 使用 base64 编码避免 shell 转义问题
         {
-          const jsonStr = JSON.stringify(params.json)
+          const jsonStr = JSON.stringify(params.app)
           const base64Json = btoa(jsonStr)
-          command += ` app set --pkg "${params.pkg}" --json-base64 "${base64Json}"`
+          command += ` app set --pkg "${params.pkg}" --json "${jsonStr}"`
         }
         break
       case 'app delete':
@@ -317,9 +317,9 @@ export const useAppStore = defineStore('app', () => {
       case 'global set':
         // 使用 base64 编码避免 shell 转义问题
         {
-          const jsonStr = JSON.stringify(params.json)
+          const jsonStr = JSON.stringify(params.global)
           const base64Json = btoa(jsonStr)
-          command += ` global set --json-base64 "${base64Json}"`
+          command += ` global set --json "${jsonStr}"`
         }
         break
       case 'log tail':
@@ -662,7 +662,7 @@ export const useAppStore = defineStore('app', () => {
       // 首先尝试通过 daemon 保存
       const result = await callDaemon('app set', {
         pkg,
-        json: configToSave
+        app: configToSave
       })
       if (result && result.ok) {
         appConfigs.value[pkg] = configToSave
@@ -706,7 +706,7 @@ export const useAppStore = defineStore('app', () => {
 
     try {
       // 首先尝试通过 daemon 保存
-      const result = await callDaemon('global set', { json: configToSave })
+      const result = await callDaemon('global set', { global: configToSave })
       if (result && result.ok) {
         globalConfig.value = configToSave
         ksuApi.toast('保存成功')
