@@ -798,21 +798,21 @@ export const useAppStore = defineStore('app', () => {
         config.apps = {}
       }
 
-      // 获取该应用的现有配置
-      const existingConfig = config.apps[pkg] || {}
-      console.log('saveAppConfig: existing config for', pkg, ':', JSON.stringify(existingConfig).substring(0, 200))
+      // 获取内存中的配置（优先使用，因为可能包含最新的 enabled 状态）
+      const memoryConfig = appConfigs.value[pkg] || {}
+      // 获取文件中的配置
+      const fileConfig = config.apps[pkg] || {}
+      console.log('saveAppConfig: memory config for', pkg, ':', JSON.stringify(memoryConfig).substring(0, 200))
+      console.log('saveAppConfig: file config for', pkg, ':', JSON.stringify(fileConfig).substring(0, 200))
 
-      // 合并配置：保留现有配置，只更新提供的字段
-      // 注意：configToSave 可能包含空数组，需要特殊处理
-      const mergedConfig = { ...existingConfig }
+      // 合并配置：内存配置优先，然后文件配置，最后是要保存的字段
+      const mergedConfig = {
+        ...fileConfig,
+        ...memoryConfig,
+        ...configToSave
+      }
 
-      // 只更新明确提供的字段
-      if (configToSave.enabled !== undefined) mergedConfig.enabled = configToSave.enabled
-      if (configToSave.redirectRules !== undefined) mergedConfig.redirectRules = configToSave.redirectRules
-      if (configToSave.readOnlyRules !== undefined) mergedConfig.readOnlyRules = configToSave.readOnlyRules
-      if (configToSave.monitorPaths !== undefined) mergedConfig.monitorPaths = configToSave.monitorPaths
-
-      // 确保所有数组字段都是数组类型（防止 existingConfig 中的 null 值）
+      // 确保所有数组字段都是数组类型（防止 null 值）
       mergedConfig.redirectRules = Array.isArray(mergedConfig.redirectRules) ? mergedConfig.redirectRules : []
       mergedConfig.readOnlyRules = Array.isArray(mergedConfig.readOnlyRules) ? mergedConfig.readOnlyRules : []
       mergedConfig.monitorPaths = Array.isArray(mergedConfig.monitorPaths) ? mergedConfig.monitorPaths : []

@@ -471,6 +471,8 @@ const saveRedirectRule = async () => {
   const src = redirectForm.value.src.trim()
   const dst = redirectForm.value.dst.trim()
 
+  console.log('saveRedirectRule: src from form:', JSON.stringify(src), 'dst from form:', JSON.stringify(dst))
+
   if (!src || !dst) {
     alert('请填写源路径和目标路径')
     return
@@ -488,24 +490,40 @@ const saveRedirectRule = async () => {
 
   console.log('saveRedirectRule: before update, config.value:', JSON.stringify(config.value))
   console.log('saveRedirectRule: current redirectRules:', JSON.stringify(config.value.redirectRules))
+  console.log('saveRedirectRule: editingRedirectIndex:', editingRedirectIndex.value)
 
   // 创建新的规则数组以确保响应式更新
-  const newRules = [...(config.value.redirectRules || [])]
-  if (editingRedirectIndex.value !== null) {
-    newRules[editingRedirectIndex.value] = { src, dst }
-  } else {
-    newRules.push({ src, dst })
-  }
-  config.value.redirectRules = newRules
+  const currentRules = config.value.redirectRules || []
+  console.log('saveRedirectRule: currentRules type:', typeof currentRules, 'isArray:', Array.isArray(currentRules))
 
-  console.log('saveRedirectRule: after update, newRules:', JSON.stringify(newRules))
-  console.log('saveRedirectRule: after update, config.value.redirectRules:', JSON.stringify(config.value.redirectRules))
+  let newRules
+  if (editingRedirectIndex.value !== null) {
+    // 编辑现有规则
+    newRules = currentRules.map((rule, index) =>
+      index === editingRedirectIndex.value ? { src, dst } : rule
+    )
+    console.log('saveRedirectRule: updated existing rule at index', editingRedirectIndex.value)
+  } else {
+    // 添加新规则
+    newRules = [...currentRules, { src, dst }]
+    console.log('saveRedirectRule: added new rule:', { src, dst })
+  }
+
+  console.log('saveRedirectRule: newRules:', JSON.stringify(newRules))
+
+  // 直接替换整个 config.value 对象以确保响应式
+  config.value = {
+    ...config.value,
+    redirectRules: newRules
+  }
+
+  console.log('saveRedirectRule: after update, config.value:', JSON.stringify(config.value))
 
   closeRedirectModal()
 
   // 等待响应式更新完成后再保存
   await nextTick()
-  console.log('saveRedirectRule: after nextTick, redirectRules:', JSON.stringify(config.value.redirectRules))
+  console.log('saveRedirectRule: after nextTick, config.value.redirectRules:', JSON.stringify(config.value.redirectRules))
 
   // 只保存 redirectRules 字段
   await saveConfig('redirectRules')
@@ -540,6 +558,8 @@ const closeReadonlyModal = () => {
 const saveReadonlyRule = async () => {
   const path = readonlyForm.value.path.trim()
 
+  console.log('saveReadonlyRule: path from form:', JSON.stringify(path))
+
   if (!path) {
     alert('请填写只读路径')
     return
@@ -552,26 +572,41 @@ const saveReadonlyRule = async () => {
 
   console.log('saveReadonlyRule: before update, config.value:', JSON.stringify(config.value))
   console.log('saveReadonlyRule: current readOnlyRules:', JSON.stringify(config.value.readOnlyRules))
+  console.log('saveReadonlyRule: editingReadonlyIndex:', editingReadonlyIndex.value)
 
   // 创建新的规则数组以确保响应式更新
-  const newRules = [...(config.value.readOnlyRules || [])]
+  // 使用 slice() 创建浅拷贝，然后添加新规则
+  const currentRules = config.value.readOnlyRules || []
+  console.log('saveReadonlyRule: currentRules type:', typeof currentRules, 'isArray:', Array.isArray(currentRules))
 
+  let newRules
   if (editingReadonlyIndex.value !== null) {
-    newRules[editingReadonlyIndex.value] = { path }
+    // 编辑现有规则
+    newRules = currentRules.map((rule, index) =>
+      index === editingReadonlyIndex.value ? { path } : rule
+    )
+    console.log('saveReadonlyRule: updated existing rule at index', editingReadonlyIndex.value)
   } else {
-    newRules.push({ path })
+    // 添加新规则
+    newRules = [...currentRules, { path }]
+    console.log('saveReadonlyRule: added new rule:', { path })
   }
 
-  config.value.readOnlyRules = newRules
+  console.log('saveReadonlyRule: newRules:', JSON.stringify(newRules))
 
-  console.log('saveReadonlyRule: after update, newRules:', JSON.stringify(newRules))
-  console.log('saveReadonlyRule: after update, config.value.readOnlyRules:', JSON.stringify(config.value.readOnlyRules))
+  // 直接替换整个 config.value 对象以确保响应式
+  config.value = {
+    ...config.value,
+    readOnlyRules: newRules
+  }
+
+  console.log('saveReadonlyRule: after update, config.value:', JSON.stringify(config.value))
 
   closeReadonlyModal()
 
   // 等待响应式更新完成后再保存
   await nextTick()
-  console.log('saveReadonlyRule: after nextTick, readOnlyRules:', JSON.stringify(config.value.readOnlyRules))
+  console.log('saveReadonlyRule: after nextTick, config.value.readOnlyRules:', JSON.stringify(config.value.readOnlyRules))
 
   // 只保存 readOnlyRules 字段
   await saveConfig('readOnlyRules')
