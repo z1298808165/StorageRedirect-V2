@@ -33,6 +33,11 @@ const initKsuApi = async () => {
     // 获取模块的所有属性
     const keys = Object.keys(ksuModule)
     console.log('[store] ksuModule keys:', keys)
+    
+    // 打印所有属性的类型以便调试
+    keys.forEach(key => {
+      console.log(`[store] ksuModule.${key} type:`, typeof ksuModule[key])
+    })
 
     // 直接从 window.kernelsu 获取 API 函数
     if (ksuModule.listPackages) {
@@ -144,6 +149,12 @@ const ksuApi = {
 
   // 执行命令 - 使用导入的 exec 函数
   exec: async (command, options = {}) => {
+    // 确保 API 已初始化
+    if (!ksuModuleLoaded) {
+      console.log('[ksuApi] exec called but API not initialized, trying to init...')
+      await initKsuApi()
+    }
+    
     if (!ksuApis.exec) {
       console.warn('[ksuApi] exec API not available, command will not be executed:', command)
       // 返回模拟的失败结果，而不是抛出错误
@@ -162,7 +173,13 @@ const ksuApi = {
 
   // 获取应用列表 - 使用导入的 listPackages 函数
   // 注意：根据 KernelSU 文档，listPackages 是同步函数
-  listPackages: (type = 'all') => {
+  listPackages: async (type = 'all') => {
+    // 确保 API 已初始化
+    if (!ksuModuleLoaded) {
+      console.log('[ksuApi] listPackages called but API not initialized, trying to init...')
+      await initKsuApi()
+    }
+    
     if (!ksuApis.listPackages) {
       throw new Error('listPackages API not available')
     }
@@ -190,7 +207,13 @@ const ksuApi = {
 
   // 获取应用信息 - 使用导入的 getPackagesInfo 函数
   // 注意：根据 KernelSU 文档，getPackagesInfo 是同步函数
-  getPackagesInfo: (packages) => {
+  getPackagesInfo: async (packages) => {
+    // 确保 API 已初始化
+    if (!ksuModuleLoaded) {
+      console.log('[ksuApi] getPackagesInfo called but API not initialized, trying to init...')
+      await initKsuApi()
+    }
+    
     if (!ksuApis.getPackagesInfo) {
       throw new Error('getPackagesInfo API not available')
     }
@@ -424,12 +447,12 @@ export const useAppStore = defineStore('app', () => {
       let allPackages = []
 
       // 根据类型获取应用包名列表 - 参考示例代码实现
-      // 注意：根据 KernelSU 文档，listPackages 是同步函数
+      // 注意：listPackages 现在需要 await
       if (type === 'all' || type === 'user') {
         // 获取用户应用
         try {
           console.log('[store] Calling ksuApi.listPackages("user")...')
-          const userPackages = ksuApi.listPackages('user')
+          const userPackages = await ksuApi.listPackages('user')
           console.log('[store] User packages result:', userPackages)
           console.log('[store] User packages is array:', Array.isArray(userPackages))
 
@@ -445,7 +468,7 @@ export const useAppStore = defineStore('app', () => {
         // 获取系统应用
         try {
           console.log('[store] Calling ksuApi.listPackages("system")...')
-          const systemPackages = ksuApi.listPackages('system')
+          const systemPackages = await ksuApi.listPackages('system')
           console.log('[store] System packages result:', systemPackages)
           console.log('[store] System packages is array:', Array.isArray(systemPackages))
 
@@ -469,9 +492,9 @@ export const useAppStore = defineStore('app', () => {
         throw new Error('获取应用列表为空')
       }
 
-      // 注意：根据 KernelSU 文档，getPackagesInfo 是同步函数
+      // 注意：getPackagesInfo 现在需要 await
       console.log('[store] Calling ksuApi.getPackagesInfo...')
-      const info = ksuApi.getPackagesInfo(allPackages)
+      const info = await ksuApi.getPackagesInfo(allPackages)
       console.log('[store] Info result:', info)
       console.log('[store] Info is array:', Array.isArray(info))
 
