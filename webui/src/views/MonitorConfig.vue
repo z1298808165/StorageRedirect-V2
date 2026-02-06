@@ -402,8 +402,12 @@ const closePathModal = () => {
 }
 
 const savePath = () => {
+  console.log('========== savePath 开始 ==========')
+  console.log('【savePath】表单数据:', JSON.stringify(pathForm.value, null, 2))
+  
   if (!pathForm.value.path.trim()) {
     alert('请输入监控路径')
+    console.log('【savePath】失败：路径为空')
     return
   }
 
@@ -413,29 +417,40 @@ const savePath = () => {
   if (pathForm.value.operations.delete) operations.push('delete')
   if (pathForm.value.operations.mkdir) operations.push('mkdir')
 
+  console.log('【savePath】选择的操作:', JSON.stringify(operations))
+
   if (operations.length === 0) {
     alert('请至少选择一个监控操作')
+    console.log('【savePath】失败：未选择操作')
     return
   }
 
   if (editingPath.value) {
     // 更新现有路径
+    console.log('【savePath】更新现有路径, ID:', editingPath.value.id)
     editingPath.value.path = pathForm.value.path.trim()
     editingPath.value.desc = pathForm.value.desc.trim()
     editingPath.value.operations = operations
+    console.log('【savePath】更新后的路径数据:', JSON.stringify(editingPath.value, null, 2))
   } else {
     // 添加新路径
-    monitorPaths.value.push({
+    const newPath = {
       id: Date.now(),
       path: pathForm.value.path.trim(),
       desc: pathForm.value.desc.trim(),
       operations: operations
-    })
+    }
+    monitorPaths.value.push(newPath)
+    console.log('【savePath】添加新路径:', JSON.stringify(newPath, null, 2))
   }
 
+  console.log('【savePath】当前所有监控路径:', JSON.stringify(monitorPaths.value, null, 2))
+
   // 保存到配置
+  console.log('【savePath】调用 saveMonitorPaths...')
   saveMonitorPaths()
   closePathModal()
+  console.log('========== savePath 完成 ==========')
 }
 
 const confirmDeletePath = (path) => {
@@ -460,6 +475,8 @@ const deletePath = () => {
 }
 
 const saveMonitorPaths = async () => {
+  console.log('========== saveMonitorPaths 开始 ==========')
+  
   // 将监控路径保存到全局配置
   const pathsConfig = monitorPaths.value.map(p => ({
     id: p.id,
@@ -467,29 +484,41 @@ const saveMonitorPaths = async () => {
     desc: p.desc,
     operations: p.operations
   }))
+  console.log('【步骤1】准备保存的监控路径数据:', JSON.stringify(pathsConfig, null, 2))
 
   // 先加载最新的全局配置，确保不丢失其他字段
+  console.log('【步骤2】加载当前全局配置...')
   await appStore.loadGlobalConfig()
   const currentGlobalConfig = appStore.globalConfig || {}
+  console.log('【步骤3】当前全局配置:', JSON.stringify(currentGlobalConfig, null, 2))
 
   // 创建新的配置对象，只更新 monitorPaths 字段
+  console.log('【步骤4】合并配置...')
   const newConfig = {
     ...JSON.parse(JSON.stringify(currentGlobalConfig)),
     ...JSON.parse(JSON.stringify(config.value)),
     monitorPaths: pathsConfig
   }
-
-  console.log('saveMonitorPaths: saving config with monitorPaths:', JSON.stringify(newConfig).substring(0, 200))
+  console.log('【步骤5】合并后的新配置:', JSON.stringify(newConfig, null, 2))
 
   // 保存到 store
+  console.log('【步骤6】调用 appStore.saveGlobalConfig 保存配置...')
   const success = await appStore.saveGlobalConfig(newConfig)
+  
   if (success) {
     // 更新本地 config
     config.value = newConfig
-    console.log('Monitor paths saved successfully')
+    console.log('【步骤7】保存成功！')
+    
+    // 重新加载配置以确认保存结果
+    console.log('【步骤8】重新加载配置以验证保存结果...')
+    await appStore.loadGlobalConfig()
+    console.log('【步骤9】保存后的最新配置:', JSON.stringify(appStore.globalConfig, null, 2))
+    console.log('========== saveMonitorPaths 完成 ==========')
   } else {
-    console.error('Failed to save monitor paths')
+    console.error('【步骤7】保存失败！')
     alert('保存失败，请重试')
+    console.log('========== saveMonitorPaths 失败 ==========')
   }
 }
 
@@ -537,12 +566,28 @@ const showMonitorLogs = () => {
 }
 
 onMounted(async () => {
+  console.log('========== MonitorConfig 页面加载开始 ==========')
+  
+  console.log('【页面加载-步骤1】加载全局配置...')
   await appStore.loadGlobalConfig()
+  console.log('【页面加载-步骤2】加载到的全局配置:', JSON.stringify(appStore.globalConfig, null, 2))
+  
   if (appStore.globalConfig) {
     config.value = { ...config.value, ...appStore.globalConfig }
+    console.log('【页面加载-步骤3】合并后的本地配置:', JSON.stringify(config.value, null, 2))
+  } else {
+    console.log('【页面加载-步骤3】没有全局配置，使用默认配置:', JSON.stringify(config.value, null, 2))
   }
+  
+  console.log('【页面加载-步骤4】加载统计信息...')
   await loadStats()
+  console.log('【页面加载-步骤5】统计信息:', JSON.stringify(logStats.value, null, 2))
+  
+  console.log('【页面加载-步骤6】加载监控路径...')
   await loadMonitorPaths()
+  console.log('【页面加载-步骤7】加载到的监控路径:', JSON.stringify(monitorPaths.value, null, 2))
+  
+  console.log('========== MonitorConfig 页面加载完成 ==========')
 })
 </script>
 

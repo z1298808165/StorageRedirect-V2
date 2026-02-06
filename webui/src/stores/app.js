@@ -555,14 +555,20 @@ export const useAppStore = defineStore('app', () => {
 
   // 直接读取配置文件（备用方案）
   const readConfigFile = async () => {
+    console.log('【readConfigFile】开始读取配置文件:', CONFIG_PATH)
     try {
       const result = await ksuApi.exec(`cat ${CONFIG_PATH} 2>/dev/null || echo '{"version":1,"global":{},"apps":{}}'`)
+      console.log('【readConfigFile】命令执行结果:', JSON.stringify(result))
       if (result && result.stdout) {
-        return JSON.parse(result.stdout)
+        const parsed = JSON.parse(result.stdout)
+        console.log('【readConfigFile】解析后的配置:', JSON.stringify(parsed, null, 2))
+        console.log('【readConfigFile】配置包含 apps 数量:', Object.keys(parsed.apps || {}).length)
+        return parsed
       }
     } catch (e) {
-      console.error('Failed to read config file:', e)
+      console.error('【readConfigFile】读取失败:', e)
     }
+    console.log('【readConfigFile】返回默认配置')
     return { version: 1, global: {}, apps: {} }
   }
 
@@ -692,27 +698,47 @@ export const useAppStore = defineStore('app', () => {
 
   // 加载全局配置
   const loadGlobalConfig = async () => {
-    if (isDemoMode.value) return
+    console.log('========== loadGlobalConfig 开始 ==========')
+    
+    if (isDemoMode.value) {
+      console.log('【loadGlobalConfig】演示模式，跳过加载')
+      console.log('========== loadGlobalConfig 完成（演示模式）==========')
+      return
+    }
 
     try {
       // 首先尝试通过 daemon 获取
+      console.log('【loadGlobalConfig】尝试通过 daemon 获取全局配置...')
       const result = await callDaemon('global get')
+      console.log('【loadGlobalConfig】daemon 返回结果:', JSON.stringify(result, null, 2))
+      
       if (result && result.ok && result.global) {
         globalConfig.value = result.global
+        console.log('【loadGlobalConfig】从 daemon 加载成功:', JSON.stringify(globalConfig.value, null, 2))
+        console.log('========== loadGlobalConfig 完成（daemon）==========')
         return
       }
+      console.log('【loadGlobalConfig】daemon 返回无效结果')
     } catch (e) {
-      console.log('Daemon global get failed, trying direct file read:', e)
+      console.log('【loadGlobalConfig】daemon 获取失败:', e)
     }
 
     // 备用方案：直接读取配置文件
+    console.log('【loadGlobalConfig】使用备用方案：直接读取配置文件...')
     try {
       const config = await readConfigFile()
+      console.log('【loadGlobalConfig】读取到的完整配置:', JSON.stringify(config, null, 2))
+      
       if (config && config.global) {
         globalConfig.value = config.global
+        console.log('【loadGlobalConfig】从文件加载成功:', JSON.stringify(globalConfig.value, null, 2))
+      } else {
+        console.log('【loadGlobalConfig】配置文件中没有 global 字段')
       }
+      console.log('========== loadGlobalConfig 完成（文件）==========')
     } catch (e) {
-      console.error('Failed to load global config:', e)
+      console.error('【loadGlobalConfig】读取文件失败:', e)
+      console.log('========== loadGlobalConfig 失败 ==========')
     }
   }
 
@@ -862,42 +888,64 @@ export const useAppStore = defineStore('app', () => {
 
   // 保存全局配置
   const saveGlobalConfig = async (newConfig) => {
+    console.log('========== saveGlobalConfig 开始 ==========')
+    console.log('【saveGlobalConfig】传入的配置:', JSON.stringify(newConfig, null, 2))
+    
     // 确保配置对象是可序列化的
     const configToSave = JSON.parse(JSON.stringify(newConfig))
+    console.log('【saveGlobalConfig】序列化后的配置:', JSON.stringify(configToSave, null, 2))
 
     if (isDemoMode.value) {
+      console.log('【saveGlobalConfig】演示模式，直接保存到内存')
       globalConfig.value = configToSave
       ksuApi.toast('保存成功（演示模式）')
+      console.log('========== saveGlobalConfig 完成（演示模式）==========')
       return true
     }
 
     // 首先尝试通过 daemon 保存
+    console.log('【saveGlobalConfig】尝试通过 daemon 保存...')
     const result = await callDaemon('global set', { global: configToSave })
+    console.log('【saveGlobalConfig】daemon 返回结果:', JSON.stringify(result, null, 2))
+    
     if (result && result.ok) {
+      console.log('【saveGlobalConfig】daemon 保存成功')
       globalConfig.value = configToSave
       ksuApi.toast('保存成功')
+      console.log('========== saveGlobalConfig 完成（daemon）==========')
       return true
     }
 
     // daemon 保存失败，使用备用方案：直接写入配置文件
-    console.log('Daemon global set failed, trying direct file write:', result?.error)
+    console.log('【saveGlobalConfig】daemon 保存失败，使用备用方案:', result?.error)
     try {
+      console.log('【saveGlobalConfig】读取现有配置文件...')
       const config = await readConfigFile()
+      console.log('【saveGlobalConfig】读取到的完整配置:', JSON.stringify(config, null, 2))
+      
       // 只更新 global 字段，保留 apps 等其他字段
+      console.log('【saveGlobalConfig】更新 global 字段...')
       config.global = configToSave
-      console.log('saveGlobalConfig: saving config with apps count:', Object.keys(config.apps || {}).length)
+      console.log('【saveGlobalConfig】准备保存的完整配置（含 apps）:', JSON.stringify(config, null, 2))
+      console.log('【saveGlobalConfig】apps 数量:', Object.keys(config.apps || {}).length)
+      
       const success = await writeConfigFile(config)
+      console.log('【saveGlobalConfig】writeConfigFile 返回:', success)
+      
       if (success) {
         globalConfig.value = configToSave
         ksuApi.toast('保存成功')
+        console.log('========== saveGlobalConfig 完成（备用方案）==========')
         return true
       } else {
         ksuApi.toast('保存失败：无法写入配置文件')
+        console.log('========== saveGlobalConfig 失败（写入失败）==========')
         return false
       }
     } catch (e) {
-      console.error('Failed to save global config:', e)
+      console.error('【saveGlobalConfig】异常:', e)
       ksuApi.toast('保存失败: ' + e.message)
+      console.log('========== saveGlobalConfig 失败（异常）==========')
       return false
     }
   }
