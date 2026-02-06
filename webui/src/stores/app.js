@@ -291,6 +291,7 @@ export const useAppStore = defineStore('app', () => {
 
   // Getters
   const appsWithRules = computed(() => {
+    if (!apps.value || !appConfigs.value) return []
     return apps.value.filter(app => {
       const config = appConfigs.value[app.packageName]
       return config && (config.enabled || 
@@ -300,6 +301,7 @@ export const useAppStore = defineStore('app', () => {
   })
 
   const appsWithoutRules = computed(() => {
+    if (!apps.value || !appConfigs.value) return []
     return apps.value.filter(app => {
       const config = appConfigs.value[app.packageName]
       return !config || (!config.enabled && 
