@@ -574,7 +574,7 @@ export const useAppStore = defineStore('app', () => {
       // 使用 base64 编码避免 shell 转义问题（支持 Unicode）
       const base64Json = utf8ToBase64(configJson)
       console.log('writeConfigFile: base64Json length:', base64Json.length)
-      
+
       // 先创建配置目录
       const configDir = CONFIG_PATH.substring(0, CONFIG_PATH.lastIndexOf('/'))
       const mkdirResult = await ksuApi.exec(`mkdir -p ${configDir}`)
@@ -583,13 +583,28 @@ export const useAppStore = defineStore('app', () => {
         console.error('writeConfigFile: mkdir failed:', mkdirResult?.stderr)
         return false
       }
-      
-      // 使用 printf 代替 echo，避免转义问题
-      const cmd = `printf '%s' "${base64Json}" | base64 -d > ${CONFIG_PATH}`
-      console.log('writeConfigFile: executing command')
-      const result = await ksuApi.exec(cmd)
-      console.log('writeConfigFile: exec result:', JSON.stringify(result))
-      if (result && result.errno === 0) {
+
+      // 使用单引号包裹 base64 字符串，避免 shell 变量扩展
+      // 先将 base64 内容写入临时文件，再解码到目标文件
+      const tempFile = '/tmp/sr_config_base64.tmp'
+      const writeTempResult = await ksuApi.exec(`cat > ${tempFile} << 'EOF__STORAGE_REDIRECT'
+${base64Json}
+EOF__STORAGE_REDIRECT`)
+      console.log('writeConfigFile: write temp result:', JSON.stringify(writeTempResult))
+
+      if (!writeTempResult || writeTempResult.errno !== 0) {
+        console.error('writeConfigFile: write temp failed:', writeTempResult?.stderr)
+        return false
+      }
+
+      // 解码 base64 到目标文件
+      const decodeResult = await ksuApi.exec(`base64 -d ${tempFile} > ${CONFIG_PATH}`)
+      console.log('writeConfigFile: decode result:', JSON.stringify(decodeResult))
+
+      // 删除临时文件
+      await ksuApi.exec(`rm -f ${tempFile}`)
+
+      if (decodeResult && decodeResult.errno === 0) {
         // 验证文件是否写入成功
         const verifyResult = await ksuApi.exec(`cat ${CONFIG_PATH} | head -c 100`)
         console.log('writeConfigFile: verify result:', JSON.stringify(verifyResult))
@@ -601,7 +616,7 @@ export const useAppStore = defineStore('app', () => {
           return false
         }
       } else {
-        console.error('writeConfigFile: failed, errno:', result?.errno, 'stderr:', result?.stderr)
+        console.error('writeConfigFile: failed, errno:', decodeResult?.errno, 'stderr:', decodeResult?.stderr)
       }
     } catch (e) {
       console.error('writeConfigFile: exception:', e)

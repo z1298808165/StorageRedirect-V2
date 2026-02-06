@@ -15,7 +15,7 @@
         </div>
       </div>
       <label class="switch">
-        <input type="checkbox" v-model="config.enabled" @change="saveConfig">
+        <input type="checkbox" v-model="config.enabled" @change="() => saveConfig('enabled')">
         <span class="slider"></span>
       </label>
     </div>
@@ -387,7 +387,7 @@ const config = ref({
   monitorPaths: []
 })
 
-// 确保配置对象有正确的结构
+// 确保配置对象有正确的结构（只在初始化时调用，不要覆盖已有数据）
 const ensureConfigStructure = () => {
   if (!config.value) {
     config.value = {
@@ -397,13 +397,14 @@ const ensureConfigStructure = () => {
       monitorPaths: []
     }
   }
-  if (!Array.isArray(config.value.redirectRules)) {
+  // 只在字段不存在时初始化，不要覆盖已有数据
+  if (config.value.redirectRules === undefined || config.value.redirectRules === null) {
     config.value.redirectRules = []
   }
-  if (!Array.isArray(config.value.readOnlyRules)) {
+  if (config.value.readOnlyRules === undefined || config.value.readOnlyRules === null) {
     config.value.readOnlyRules = []
   }
-  if (!Array.isArray(config.value.monitorPaths)) {
+  if (config.value.monitorPaths === undefined || config.value.monitorPaths === null) {
     config.value.monitorPaths = []
   }
 }
@@ -615,16 +616,23 @@ const saveConfig = async (fieldToUpdate = null) => {
   try {
     // 确保配置结构正确
     ensureConfigStructure()
-    
+
     // 创建要保存的配置对象，只包含需要更新的字段
     let configToSave = {}
-    
+
     if (fieldToUpdate) {
       // 只更新指定字段
       const fieldValue = config.value[fieldToUpdate]
+      console.log('saveConfig: fieldToUpdate:', fieldToUpdate, 'fieldValue:', fieldValue)
+
       // 确保字段值存在且可序列化
       if (fieldValue !== undefined) {
-        configToSave[fieldToUpdate] = JSON.parse(JSON.stringify(fieldValue))
+        // 对于 enabled 字段，确保保存为布尔值
+        if (fieldToUpdate === 'enabled') {
+          configToSave[fieldToUpdate] = fieldValue === true
+        } else {
+          configToSave[fieldToUpdate] = JSON.parse(JSON.stringify(fieldValue))
+        }
       } else {
         configToSave[fieldToUpdate] = fieldToUpdate === 'enabled' ? false : []
       }
@@ -635,20 +643,23 @@ const saveConfig = async (fieldToUpdate = null) => {
       const redirectRules = config.value.redirectRules || []
       const readOnlyRules = config.value.readOnlyRules || []
       const monitorPaths = config.value.monitorPaths || []
-      
+
       configToSave = {
-        enabled: config.value.enabled || false,
+        enabled: config.value.enabled === true,
         redirectRules: JSON.parse(JSON.stringify(redirectRules)),
         readOnlyRules: JSON.parse(JSON.stringify(readOnlyRules)),
         monitorPaths: JSON.parse(JSON.stringify(monitorPaths))
       }
       console.log('saveConfig: saving all config:', JSON.stringify(configToSave))
     }
-    
+
     const success = await appStore.saveAppConfig(props.pkg, configToSave)
     if (success) {
       console.log('saveConfig: save successful')
-      // 保存成功，不需要重新读取配置，因为 saveAppConfig 已经合并了配置
+      // 保存成功，更新本地配置状态
+      if (fieldToUpdate && configToSave[fieldToUpdate] !== undefined) {
+        config.value[fieldToUpdate] = configToSave[fieldToUpdate]
+      }
     } else {
       console.error('saveConfig: save failed')
       alert('保存失败')
