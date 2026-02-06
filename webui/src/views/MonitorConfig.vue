@@ -468,19 +468,24 @@ const saveMonitorPaths = async () => {
     operations: p.operations
   }))
 
-  // 创建新的配置对象
+  // 先加载最新的全局配置，确保不丢失其他字段
+  await appStore.loadGlobalConfig()
+  const currentGlobalConfig = appStore.globalConfig || {}
+
+  // 创建新的配置对象，只更新 monitorPaths 字段
   const newConfig = {
+    ...JSON.parse(JSON.stringify(currentGlobalConfig)),
     ...JSON.parse(JSON.stringify(config.value)),
     monitorPaths: pathsConfig
   }
+
+  console.log('saveMonitorPaths: saving config with monitorPaths:', JSON.stringify(newConfig).substring(0, 200))
 
   // 保存到 store
   const success = await appStore.saveGlobalConfig(newConfig)
   if (success) {
     // 更新本地 config
     config.value = newConfig
-    // 更新 store 中的全局配置
-    appStore.globalConfig = newConfig
     console.log('Monitor paths saved successfully')
   } else {
     console.error('Failed to save monitor paths')
