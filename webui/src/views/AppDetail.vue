@@ -538,14 +538,23 @@ const saveReadonlyRule = async () => {
     return
   }
 
+  console.log('saveReadonlyRule: before update, readOnlyRules:', JSON.stringify(config.value.readOnlyRules))
+  
   // 创建新的规则数组以确保响应式更新
   const newRules = [...config.value.readOnlyRules]
+  console.log('saveReadonlyRule: copied rules:', JSON.stringify(newRules))
+  
   if (editingReadonlyIndex.value !== null) {
     newRules[editingReadonlyIndex.value] = { path }
   } else {
     newRules.push({ path })
   }
+  
+  console.log('saveReadonlyRule: after push, newRules:', JSON.stringify(newRules))
+  
   config.value.readOnlyRules = newRules
+  
+  console.log('saveReadonlyRule: after update config, readOnlyRules:', JSON.stringify(config.value.readOnlyRules))
 
   closeReadonlyModal()
   // 只保存 readOnlyRules 字段
