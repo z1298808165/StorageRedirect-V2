@@ -264,9 +264,10 @@ export const useAppStore = defineStore('app', () => {
     if (!apps.value || !appConfigs.value) return []
     return apps.value.filter(app => {
       const config = appConfigs.value[app.packageName]
-      return config && (config.enabled || 
-        (config.redirectRules?.length > 0) ||
-        (config.readOnlyRules?.length > 0))
+      const hasRules = config && (config.enabled === true ||
+        (Array.isArray(config.redirectRules) && config.redirectRules.length > 0) ||
+        (Array.isArray(config.readOnlyRules) && config.readOnlyRules.length > 0))
+      return hasRules
     })
   })
 
@@ -274,9 +275,10 @@ export const useAppStore = defineStore('app', () => {
     if (!apps.value || !appConfigs.value) return []
     return apps.value.filter(app => {
       const config = appConfigs.value[app.packageName]
-      return !config || (!config.enabled && 
-        (!config.redirectRules || config.redirectRules.length === 0) &&
-        (!config.readOnlyRules || config.readOnlyRules.length === 0))
+      const noRules = !config || (config.enabled !== true &&
+        (!Array.isArray(config.redirectRules) || config.redirectRules.length === 0) &&
+        (!Array.isArray(config.readOnlyRules) || config.readOnlyRules.length === 0))
+      return noRules
     })
   })
 
@@ -614,30 +616,53 @@ export const useAppStore = defineStore('app', () => {
       return
     }
 
+    // 备用方案：直接读取配置文件（优先使用直接读取，确保获取完整配置）
     try {
-      // 首先尝试通过 daemon 获取
+      const config = await readConfigFile()
+      if (config && config.apps) {
+        // 确保每个应用的配置都有正确的结构
+        const normalizedConfigs = {}
+        Object.entries(config.apps).forEach(([pkg, appConfig]) => {
+          normalizedConfigs[pkg] = {
+            enabled: appConfig.enabled === true,
+            redirectRules: Array.isArray(appConfig.redirectRules) ? appConfig.redirectRules : [],
+            readOnlyRules: Array.isArray(appConfig.readOnlyRules) ? appConfig.readOnlyRules : [],
+            monitorPaths: Array.isArray(appConfig.monitorPaths) ? appConfig.monitorPaths : [],
+            ...appConfig
+          }
+        })
+        appConfigs.value = normalizedConfigs
+        console.log('loadAppConfigs: loaded from file, apps count:', Object.keys(normalizedConfigs).length)
+        return
+      }
+    } catch (e) {
+      console.log('Direct file read failed, trying daemon:', e)
+    }
+
+    // 尝试通过 daemon 获取
+    try {
       const result = await callDaemon('app list')
       if (result && result.ok && result.apps) {
         const configs = {}
         result.apps.forEach(app => {
-          configs[app.pkg] = app
+          // daemon 返回的可能是简化版配置，需要获取完整配置
+          configs[app.pkg] = {
+            enabled: app.enabled === true,
+            redirectRules: Array.isArray(app.redirectRules) ? app.redirectRules : [],
+            readOnlyRules: Array.isArray(app.readOnlyRules) ? app.readOnlyRules : [],
+            monitorPaths: Array.isArray(app.monitorPaths) ? app.monitorPaths : [],
+            ...app
+          }
         })
         appConfigs.value = configs
+        console.log('loadAppConfigs: loaded from daemon, apps count:', Object.keys(configs).length)
         return
       }
     } catch (e) {
-      console.log('Daemon app list failed, trying direct file read:', e)
+      console.log('Daemon app list failed:', e)
     }
 
-    // 备用方案：直接读取配置文件
-    try {
-      const config = await readConfigFile()
-      if (config && config.apps) {
-        appConfigs.value = config.apps
-      }
-    } catch (e) {
-      console.error('Failed to load app configs:', e)
-    }
+    console.error('Failed to load app configs from all sources')
   }
 
   // 加载全局配置
@@ -672,24 +697,41 @@ export const useAppStore = defineStore('app', () => {
       return demoConfigs[pkg] || null
     }
 
-    // 首先尝试通过 daemon 获取
-    const result = await callDaemon('app get', { pkg })
-    if (result && result.ok && result.app) {
-      appConfigs.value[pkg] = result.app
-      return result.app
-    }
-
-    // daemon 获取失败（可能是应用不存在），尝试直接读取配置文件
-    console.log('Daemon app get failed, trying direct file read:', result?.error)
+    // 首先尝试直接读取配置文件（优先使用文件读取，确保获取完整配置）
     try {
       const config = await readConfigFile()
       if (config && config.apps && config.apps[pkg]) {
-        appConfigs.value[pkg] = config.apps[pkg]
-        return config.apps[pkg]
+        // 规范化配置结构
+        const normalizedConfig = {
+          enabled: config.apps[pkg].enabled === true,
+          redirectRules: Array.isArray(config.apps[pkg].redirectRules) ? config.apps[pkg].redirectRules : [],
+          readOnlyRules: Array.isArray(config.apps[pkg].readOnlyRules) ? config.apps[pkg].readOnlyRules : [],
+          monitorPaths: Array.isArray(config.apps[pkg].monitorPaths) ? config.apps[pkg].monitorPaths : [],
+          ...config.apps[pkg]
+        }
+        appConfigs.value[pkg] = normalizedConfig
+        return normalizedConfig
       }
     } catch (e) {
-      console.error('Failed to get app config from file:', e)
+      console.log('Direct file read failed, trying daemon:', e)
     }
+
+    // 尝试通过 daemon 获取
+    const result = await callDaemon('app get', { pkg })
+    if (result && result.ok && result.app) {
+      // 规范化配置结构
+      const normalizedConfig = {
+        enabled: result.app.enabled === true,
+        redirectRules: Array.isArray(result.app.redirectRules) ? result.app.redirectRules : [],
+        readOnlyRules: Array.isArray(result.app.readOnlyRules) ? result.app.readOnlyRules : [],
+        monitorPaths: Array.isArray(result.app.monitorPaths) ? result.app.monitorPaths : [],
+        ...result.app
+      }
+      appConfigs.value[pkg] = normalizedConfig
+      return normalizedConfig
+    }
+
+    console.log('Failed to get app config from all sources:', result?.error)
     return null
   }
 
@@ -712,7 +754,9 @@ export const useAppStore = defineStore('app', () => {
     })
     console.log('Daemon app set result:', JSON.stringify(result))
     if (result && result.ok === true) {
-      appConfigs.value[pkg] = configToSave
+      // 合并到现有配置，而不是替换
+      const existingConfig = appConfigs.value[pkg] || {}
+      appConfigs.value[pkg] = { ...existingConfig, ...configToSave }
       ksuApi.toast('保存成功')
       return true
     }
@@ -726,26 +770,27 @@ export const useAppStore = defineStore('app', () => {
       if (!config.apps) {
         config.apps = {}
       }
-      
+
       // 获取该应用的现有配置
       const existingConfig = config.apps[pkg] || {}
       console.log('saveAppConfig: existing config for', pkg, ':', JSON.stringify(existingConfig).substring(0, 200))
-      
+
       // 合并配置：保留现有配置，只更新提供的字段
       // 注意：configToSave 可能包含空数组，需要特殊处理
       const mergedConfig = { ...existingConfig }
-      
+
       // 只更新非空数组或明确提供的字段
       if (configToSave.enabled !== undefined) mergedConfig.enabled = configToSave.enabled
       if (configToSave.redirectRules !== undefined) mergedConfig.redirectRules = configToSave.redirectRules
       if (configToSave.readOnlyRules !== undefined) mergedConfig.readOnlyRules = configToSave.readOnlyRules
       if (configToSave.monitorPaths !== undefined) mergedConfig.monitorPaths = configToSave.monitorPaths
-      
+
       config.apps[pkg] = mergedConfig
       console.log('saveAppConfig: merged config:', JSON.stringify(mergedConfig).substring(0, 200))
-      
+
       const success = await writeConfigFile(config)
       if (success) {
+        // 同时更新内存中的配置
         appConfigs.value[pkg] = mergedConfig
         ksuApi.toast('保存成功')
         return true
