@@ -11,34 +11,22 @@ let ksuApis = {
 let ksuModuleLoaded = false
 
 // 初始化 KernelSU API
+// 注意：在 KernelSU WebView 中，kernelsu API 是通过 window.kernelsu 注入的
 const initKsuApi = async () => {
   if (ksuModuleLoaded) return true
 
   try {
-    console.log('[store] Trying to import kernelsu module...')
+    console.log('[store] Trying to initialize kernelsu API...')
     console.log('[store] window.kernelsu:', typeof window.kernelsu)
+    console.log('[store] window.kernelsu object:', window.kernelsu)
     
-    let ksuModule = null
-    
-    // 方法1: 尝试从 window.kernelsu 获取（KernelSU 直接注入）
-    if (window.kernelsu) {
-      console.log('[store] Found window.kernelsu')
-      ksuModule = window.kernelsu
-    } else {
-      // 方法2: 尝试动态导入
-      try {
-        ksuModule = await import('kernelsu')
-        console.log('[store] Imported kernelsu module:', ksuModule)
-      } catch (importErr) {
-        console.error('[store] Failed to import kernelsu:', importErr)
-      }
-    }
-    
-    if (!ksuModule) {
-      console.error('[store] kernelsu module not found')
+    // 在 KernelSU WebView 环境中，API 直接通过 window.kernelsu 注入
+    if (!window.kernelsu) {
+      console.error('[store] window.kernelsu not found - not running in KernelSU WebView?')
       return false
     }
     
+    const ksuModule = window.kernelsu
     console.log('[store] ksuModule:', ksuModule)
     console.log('[store] typeof ksuModule:', typeof ksuModule)
 
@@ -46,24 +34,33 @@ const initKsuApi = async () => {
     const keys = Object.keys(ksuModule)
     console.log('[store] ksuModule keys:', keys)
 
-    // KernelSU API 使用命名导出
-    // 优先使用命名导出，如果没有则尝试默认导出
+    // 直接从 window.kernelsu 获取 API 函数
     if (ksuModule.listPackages) {
-      console.log('[store] Using named exports')
+      console.log('[store] Found listPackages in window.kernelsu')
       ksuApis.listPackages = ksuModule.listPackages
-      ksuApis.getPackagesInfo = ksuModule.getPackagesInfo
-      ksuApis.exec = ksuModule.exec
-      ksuApis.toast = ksuModule.toast
-    } else if (ksuModule.default) {
-      console.log('[store] Using default export')
-      const defaultExport = ksuModule.default
-      ksuApis.listPackages = defaultExport.listPackages
-      ksuApis.getPackagesInfo = defaultExport.getPackagesInfo
-      ksuApis.exec = defaultExport.exec
-      ksuApis.toast = defaultExport.toast
     } else {
-      console.error('[store] No valid exports found in kernelsu module')
-      return false
+      console.error('[store] listPackages not found in window.kernelsu')
+    }
+    
+    if (ksuModule.getPackagesInfo) {
+      console.log('[store] Found getPackagesInfo in window.kernelsu')
+      ksuApis.getPackagesInfo = ksuModule.getPackagesInfo
+    } else {
+      console.error('[store] getPackagesInfo not found in window.kernelsu')
+    }
+    
+    if (ksuModule.exec) {
+      console.log('[store] Found exec in window.kernelsu')
+      ksuApis.exec = ksuModule.exec
+    } else {
+      console.error('[store] exec not found in window.kernelsu')
+    }
+    
+    if (ksuModule.toast) {
+      console.log('[store] Found toast in window.kernelsu')
+      ksuApis.toast = ksuModule.toast
+    } else {
+      console.warn('[store] toast not found in window.kernelsu')
     }
 
     console.log('[store] listPackages:', typeof ksuApis.listPackages)
