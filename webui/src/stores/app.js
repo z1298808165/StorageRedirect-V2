@@ -584,13 +584,15 @@ export const useAppStore = defineStore('app', () => {
         return false
       }
 
-      // 使用单引号包裹 base64 字符串，避免 shell 变量扩展
-      // 先将 base64 内容写入临时文件，再解码到目标文件
+      // 使用 base64 编码直接写入文件
+      // 方法：将 base64 内容通过 echo 管道到 base64 -d 解码后写入文件
       const tempFile = '/tmp/sr_config_base64.tmp'
 
-      // 使用 printf 直接写入文件，避免 heredoc 的格式问题
-      // 先将 base64 内容通过 printf 写入临时文件
-      const writeCmd = `printf '%s' '${base64Json.replace(/'/g, "'\"'\"'")}' > ${tempFile}`
+      // 分两步：先将 base64 内容写入临时文件（使用 echo -n 避免自动添加换行）
+      // 使用双引号包裹，并对 $ 进行转义
+      const escapedBase64 = base64Json.replace(/\$/g, '\\$').replace(/`/g, '\\`')
+      const writeCmd = `echo -n "${escapedBase64}" > ${tempFile}`
+      console.log('writeConfigFile: writeCmd length:', writeCmd.length)
       const writeTempResult = await ksuApi.exec(writeCmd)
       console.log('writeConfigFile: write temp result:', JSON.stringify(writeTempResult))
 
@@ -598,6 +600,10 @@ export const useAppStore = defineStore('app', () => {
         console.error('writeConfigFile: write temp failed:', writeTempResult?.stderr)
         return false
       }
+
+      // 验证临时文件内容
+      const verifyTempResult = await ksuApi.exec(`cat ${tempFile} | head -c 50`)
+      console.log('writeConfigFile: temp file preview:', JSON.stringify(verifyTempResult))
 
       // 解码 base64 到目标文件
       const decodeResult = await ksuApi.exec(`base64 -d ${tempFile} > ${CONFIG_PATH}`)
@@ -640,12 +646,13 @@ export const useAppStore = defineStore('app', () => {
         // 确保每个应用的配置都有正确的结构
         const normalizedConfigs = {}
         Object.entries(config.apps).forEach(([pkg, appConfig]) => {
+          // 先展开原始配置，再用默认值覆盖 null/undefined
           normalizedConfigs[pkg] = {
+            ...appConfig,
             enabled: appConfig.enabled === true,
             redirectRules: Array.isArray(appConfig.redirectRules) ? appConfig.redirectRules : [],
             readOnlyRules: Array.isArray(appConfig.readOnlyRules) ? appConfig.readOnlyRules : [],
-            monitorPaths: Array.isArray(appConfig.monitorPaths) ? appConfig.monitorPaths : [],
-            ...appConfig
+            monitorPaths: Array.isArray(appConfig.monitorPaths) ? appConfig.monitorPaths : []
           }
         })
         appConfigs.value = normalizedConfigs
@@ -663,12 +670,13 @@ export const useAppStore = defineStore('app', () => {
         const configs = {}
         result.apps.forEach(app => {
           // daemon 返回的可能是简化版配置，需要获取完整配置
+          // 先展开原始配置，再用默认值覆盖 null/undefined
           configs[app.pkg] = {
+            ...app,
             enabled: app.enabled === true,
             redirectRules: Array.isArray(app.redirectRules) ? app.redirectRules : [],
             readOnlyRules: Array.isArray(app.readOnlyRules) ? app.readOnlyRules : [],
-            monitorPaths: Array.isArray(app.monitorPaths) ? app.monitorPaths : [],
-            ...app
+            monitorPaths: Array.isArray(app.monitorPaths) ? app.monitorPaths : []
           }
         })
         appConfigs.value = configs
@@ -718,13 +726,14 @@ export const useAppStore = defineStore('app', () => {
     try {
       const config = await readConfigFile()
       if (config && config.apps && config.apps[pkg]) {
-        // 规范化配置结构
+        const rawConfig = config.apps[pkg]
+        // 规范化配置结构 - 先展开原始配置，再用默认值覆盖 null/undefined
         const normalizedConfig = {
-          enabled: config.apps[pkg].enabled === true,
-          redirectRules: Array.isArray(config.apps[pkg].redirectRules) ? config.apps[pkg].redirectRules : [],
-          readOnlyRules: Array.isArray(config.apps[pkg].readOnlyRules) ? config.apps[pkg].readOnlyRules : [],
-          monitorPaths: Array.isArray(config.apps[pkg].monitorPaths) ? config.apps[pkg].monitorPaths : [],
-          ...config.apps[pkg]
+          ...rawConfig,
+          enabled: rawConfig.enabled === true,
+          redirectRules: Array.isArray(rawConfig.redirectRules) ? rawConfig.redirectRules : [],
+          readOnlyRules: Array.isArray(rawConfig.readOnlyRules) ? rawConfig.readOnlyRules : [],
+          monitorPaths: Array.isArray(rawConfig.monitorPaths) ? rawConfig.monitorPaths : []
         }
         appConfigs.value[pkg] = normalizedConfig
         return normalizedConfig
@@ -736,13 +745,14 @@ export const useAppStore = defineStore('app', () => {
     // 尝试通过 daemon 获取
     const result = await callDaemon('app get', { pkg })
     if (result && result.ok && result.app) {
-      // 规范化配置结构
+      const rawConfig = result.app
+      // 规范化配置结构 - 先展开原始配置，再用默认值覆盖 null/undefined
       const normalizedConfig = {
-        enabled: result.app.enabled === true,
-        redirectRules: Array.isArray(result.app.redirectRules) ? result.app.redirectRules : [],
-        readOnlyRules: Array.isArray(result.app.readOnlyRules) ? result.app.readOnlyRules : [],
-        monitorPaths: Array.isArray(result.app.monitorPaths) ? result.app.monitorPaths : [],
-        ...result.app
+        ...rawConfig,
+        enabled: rawConfig.enabled === true,
+        redirectRules: Array.isArray(rawConfig.redirectRules) ? rawConfig.redirectRules : [],
+        readOnlyRules: Array.isArray(rawConfig.readOnlyRules) ? rawConfig.readOnlyRules : [],
+        monitorPaths: Array.isArray(rawConfig.monitorPaths) ? rawConfig.monitorPaths : []
       }
       appConfigs.value[pkg] = normalizedConfig
       return normalizedConfig
@@ -796,11 +806,16 @@ export const useAppStore = defineStore('app', () => {
       // 注意：configToSave 可能包含空数组，需要特殊处理
       const mergedConfig = { ...existingConfig }
 
-      // 只更新非空数组或明确提供的字段
+      // 只更新明确提供的字段
       if (configToSave.enabled !== undefined) mergedConfig.enabled = configToSave.enabled
       if (configToSave.redirectRules !== undefined) mergedConfig.redirectRules = configToSave.redirectRules
       if (configToSave.readOnlyRules !== undefined) mergedConfig.readOnlyRules = configToSave.readOnlyRules
       if (configToSave.monitorPaths !== undefined) mergedConfig.monitorPaths = configToSave.monitorPaths
+
+      // 确保所有数组字段都是数组类型（防止 existingConfig 中的 null 值）
+      mergedConfig.redirectRules = Array.isArray(mergedConfig.redirectRules) ? mergedConfig.redirectRules : []
+      mergedConfig.readOnlyRules = Array.isArray(mergedConfig.readOnlyRules) ? mergedConfig.readOnlyRules : []
+      mergedConfig.monitorPaths = Array.isArray(mergedConfig.monitorPaths) ? mergedConfig.monitorPaths : []
 
       config.apps[pkg] = mergedConfig
       console.log('saveAppConfig: merged config:', JSON.stringify(mergedConfig).substring(0, 200))
