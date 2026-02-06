@@ -1,94 +1,25 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { listPackages, getPackagesInfo, exec, toast } from 'kernelsu'
 
-// KernelSU API 将在 store 初始化时加载
-let ksuApis = {
-  listPackages: null,
-  getPackagesInfo: null,
-  exec: null,
-  toast: null
+// KernelSU API 引用
+const ksuApis = {
+  listPackages,
+  getPackagesInfo,
+  exec,
+  toast
 }
-let ksuModuleLoaded = false
+let ksuModuleLoaded = true
 
 // 初始化 KernelSU API
-// KernelSU WebView 通过全局 ksu 对象注入所有 API
 const initKsuApi = async () => {
-  if (ksuModuleLoaded) return true
-
-  try {
-    console.log('[store] Checking global ksu object...')
-    console.log('[store] typeof ksu:', typeof ksu)
-    
-    // 检查全局 ksu 对象（KernelSU WebView 注入）
-    if (typeof ksu === 'undefined' || !ksu) {
-      console.error('[store] Global ksu object not found - not running in KernelSU WebView?')
-      return false
-    }
-    
-    console.log('[store] Found global ksu object:', ksu)
-    
-    // 获取 ksu 对象的所有属性
-    const ksuKeys = Object.keys(ksu)
-    console.log('[store] ksu object keys:', ksuKeys)
-    
-    // 打印所有属性的类型
-    ksuKeys.forEach(key => {
-      console.log(`[store] ksu.${key} type:`, typeof ksu[key])
-    })
-    
-    // 从全局 ksu 对象获取所有 API
-    if (ksu.exec) {
-      console.log('[store] Found exec in global ksu')
-      ksuApis.exec = ksu.exec
-    } else {
-      console.error('[store] exec not found in global ksu')
-    }
-    
-    if (ksu.listPackages) {
-      console.log('[store] Found listPackages in global ksu')
-      ksuApis.listPackages = ksu.listPackages
-    } else {
-      console.error('[store] listPackages not found in global ksu')
-    }
-    
-    if (ksu.getPackagesInfo) {
-      console.log('[store] Found getPackagesInfo in global ksu')
-      ksuApis.getPackagesInfo = ksu.getPackagesInfo
-    } else {
-      console.error('[store] getPackagesInfo not found in global ksu')
-    }
-    
-    if (ksu.toast) {
-      console.log('[store] Found toast in global ksu')
-      ksuApis.toast = ksu.toast
-    } else {
-      console.warn('[store] toast not found in global ksu')
-    }
-
-    console.log('[store] listPackages:', typeof ksuApis.listPackages)
-    console.log('[store] getPackagesInfo:', typeof ksuApis.getPackagesInfo)
-    console.log('[store] exec:', typeof ksuApis.exec)
-    console.log('[store] toast:', typeof ksuApis.toast)
-
-    // 检查关键 API 是否可用
-    // 注意：如果 listPackages/getPackagesInfo 不可用，可以使用 exec 命令作为替代
-    if (!ksuApis.exec) {
-      console.error('[store] exec API not available - cannot use fallback')
-      return false
-    }
-    
-    if (!ksuApis.listPackages || !ksuApis.getPackagesInfo) {
-      console.warn('[store] listPackages/getPackagesInfo not available, will use exec fallback')
-    }
-
-    ksuModuleLoaded = true
-    console.log('[store] kernelsu module loaded successfully')
-    return true
-  } catch (e) {
-    console.error('[store] Failed to load kernelsu module:', e)
-    ksuModuleLoaded = false
-    return false
-  }
+  console.log('[store] KernelSU APIs imported:', {
+    listPackages: typeof listPackages,
+    getPackagesInfo: typeof getPackagesInfo,
+    exec: typeof exec,
+    toast: typeof toast
+  })
+  return true
 }
 
 // 示例应用数据
