@@ -568,15 +568,32 @@ export const useAppStore = defineStore('app', () => {
       // 使用 base64 编码避免 shell 转义问题（支持 Unicode）
       const base64Json = utf8ToBase64(configJson)
       console.log('writeConfigFile: base64Json length:', base64Json.length)
-      // 先创建配置目录，然后写入文件
+      
+      // 先创建配置目录
       const configDir = CONFIG_PATH.substring(0, CONFIG_PATH.lastIndexOf('/'))
-      const cmd = `mkdir -p ${configDir} && echo "${base64Json}" | base64 -d > ${CONFIG_PATH}`
-      console.log('writeConfigFile: executing command, configDir:', configDir)
+      const mkdirResult = await ksuApi.exec(`mkdir -p ${configDir}`)
+      console.log('writeConfigFile: mkdir result:', JSON.stringify(mkdirResult))
+      if (!mkdirResult || mkdirResult.errno !== 0) {
+        console.error('writeConfigFile: mkdir failed:', mkdirResult?.stderr)
+        return false
+      }
+      
+      // 使用 printf 代替 echo，避免转义问题
+      const cmd = `printf '%s' "${base64Json}" | base64 -d > ${CONFIG_PATH}`
+      console.log('writeConfigFile: executing command')
       const result = await ksuApi.exec(cmd)
       console.log('writeConfigFile: exec result:', JSON.stringify(result))
       if (result && result.errno === 0) {
-        console.log('writeConfigFile: success')
-        return true
+        // 验证文件是否写入成功
+        const verifyResult = await ksuApi.exec(`cat ${CONFIG_PATH} | head -c 100`)
+        console.log('writeConfigFile: verify result:', JSON.stringify(verifyResult))
+        if (verifyResult && verifyResult.stdout && verifyResult.stdout.includes('version')) {
+          console.log('writeConfigFile: success and verified')
+          return true
+        } else {
+          console.error('writeConfigFile: verification failed')
+          return false
+        }
       } else {
         console.error('writeConfigFile: failed, errno:', result?.errno, 'stderr:', result?.stderr)
       }
@@ -699,14 +716,22 @@ export const useAppStore = defineStore('app', () => {
     // daemon 保存失败，使用备用方案：直接写入配置文件
     console.log('Daemon app set failed, trying direct file write. Result:', result)
     try {
+      // 先读取现有配置
       const config = await readConfigFile()
       if (!config.apps) {
         config.apps = {}
       }
-      config.apps[pkg] = configToSave
+      
+      // 合并配置：保留现有配置，只更新提供的字段
+      const existingConfig = config.apps[pkg] || {}
+      config.apps[pkg] = {
+        ...existingConfig,
+        ...configToSave
+      }
+      
       const success = await writeConfigFile(config)
       if (success) {
-        appConfigs.value[pkg] = configToSave
+        appConfigs.value[pkg] = config.apps[pkg]
         ksuApi.toast('保存成功')
         return true
       } else {
