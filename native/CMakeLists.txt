@@ -12,8 +12,17 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(dobby)
 
-# 添加 jsoncpp
-find_package(jsoncpp REQUIRED)
+# 添加 jsoncpp（源码方式）
+FetchContent_Declare(
+    jsoncpp
+    GIT_REPOSITORY https://github.com/open-source-parsers/jsoncpp.git
+    GIT_TAG 1.9.5
+)
+# 禁用 jsoncpp 的测试和示例
+set(JSONCPP_WITH_TESTS OFF CACHE BOOL "" FORCE)
+set(JSONCPP_WITH_POST_BUILD_UNITTEST OFF CACHE BOOL "" FORCE)
+set(JSONCPP_WITH_EXAMPLE OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(jsoncpp)
 
 # 添加 Zygisk 模块
 add_library(${CMAKE_PROJECT_NAME} SHARED
@@ -26,13 +35,14 @@ add_library(${CMAKE_PROJECT_NAME} SHARED
 
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     ${dobby_SOURCE_DIR}/include
+    ${jsoncpp_SOURCE_DIR}/include
 )
 
 target_link_libraries(${CMAKE_PROJECT_NAME}
     log
     dl
     dobby
-    jsoncpp_lib
+    jsoncpp_static
 )
 
 # 编译选项
