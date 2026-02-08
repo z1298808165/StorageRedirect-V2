@@ -130,9 +130,9 @@ type Request struct {
 
 // Response IPC响应
 type Response struct {
-	Ok     bool                   `json:"ok"`
-	Data   map[string]interface{} `json:"data,omitempty"`
-	Error  *ErrorInfo             `json:"error,omitempty"`
+	Ok    bool                   `json:"ok"`
+	Data  map[string]interface{} `json:"data,omitempty"`
+	Error *ErrorInfo             `json:"error,omitempty"`
 }
 
 // ErrorInfo 错误信息
@@ -168,6 +168,10 @@ func (s *Server) handleRequest(req *Request) Response {
 		return s.handleGlobalGet()
 	case "global.set":
 		return s.handleGlobalSet(req.Params)
+	case "monitor.get":
+		return s.handleMonitorGet()
+	case "monitor.set":
+		return s.handleMonitorSet(req.Params)
 	case "app.get":
 		return s.handleAppGet(req.Params)
 	case "app.set":
@@ -204,7 +208,7 @@ func (s *Server) handlePing() Response {
 			"version":       Version,
 			"pid":           os.Getpid(),
 			"uptimeMs":      time.Since(time.Now().Add(-time.Minute)).Milliseconds(), // 简化处理
-			"configVersion": s.daemon.config.GetVersion(),
+			"configVersion": s.daemon.configManager.GetVersion(),
 		},
 	}
 }
@@ -221,9 +225,9 @@ func (s *Server) handleStatus() Response {
 				"version":   Version,
 			},
 			"config": map[string]interface{}{
-				"path":        s.daemon.configPath,
-				"version":     s.daemon.config.GetVersion(),
-				"lastLoadedAt": time.Now().UnixMilli(),
+				"configDir":     s.daemon.configDir,
+				"version":       s.daemon.configManager.GetVersion(),
+				"lastLoadedAt":  time.Now().UnixMilli(),
 			},
 			"runtime": map[string]interface{}{
 				"socket": map[string]interface{}{
@@ -237,12 +241,12 @@ func (s *Server) handleStatus() Response {
 }
 
 func (s *Server) handleGlobalGet() Response {
-	config := s.daemon.config.GetConfig()
+	config := s.daemon.configManager.GetGlobalConfig()
 	return Response{
 		Ok: true,
 		Data: map[string]interface{}{
-			"global":        config.Global,
-			"configVersion": config.Version,
+			"global":        config,
+			"configVersion": s.daemon.configManager.GetVersion(),
 		},
 	}
 }
@@ -261,7 +265,7 @@ func (s *Server) handleGlobalSet(params json.RawMessage) Response {
 		}
 	}
 
-	if err := s.daemon.config.UpdateGlobal(req.Global); err != nil {
+	if err := s.daemon.configManager.SaveGlobalConfig(req.Global); err != nil {
 		return Response{
 			Ok: false,
 			Error: &ErrorInfo{
@@ -271,12 +275,44 @@ func (s *Server) handleGlobalSet(params json.RawMessage) Response {
 		}
 	}
 
-	// 保存到文件
-	if err := s.daemon.saveConfig(); err != nil {
+	return Response{
+		Ok: true,
+		Data: map[string]interface{}{
+			"configVersion": s.daemon.configManager.GetVersion(),
+		},
+	}
+}
+
+func (s *Server) handleMonitorGet() Response {
+	config := s.daemon.configManager.GetMonitorConfig()
+	return Response{
+		Ok: true,
+		Data: map[string]interface{}{
+			"monitor":       config,
+			"configVersion": s.daemon.configManager.GetVersion(),
+		},
+	}
+}
+
+func (s *Server) handleMonitorSet(params json.RawMessage) Response {
+	var req struct {
+		Monitor *MonitorConfig `json:"monitor"`
+	}
+	if err := json.Unmarshal(params, &req); err != nil {
 		return Response{
 			Ok: false,
 			Error: &ErrorInfo{
-				Code:    "E_CFG_WRITE",
+				Code:    "E_ARG",
+				Message: "Invalid parameters",
+			},
+		}
+	}
+
+	if err := s.daemon.configManager.SaveMonitorConfig(req.Monitor); err != nil {
+		return Response{
+			Ok: false,
+			Error: &ErrorInfo{
+				Code:    "E_CFG_VALIDATION",
 				Message: err.Error(),
 			},
 		}
@@ -285,7 +321,7 @@ func (s *Server) handleGlobalSet(params json.RawMessage) Response {
 	return Response{
 		Ok: true,
 		Data: map[string]interface{}{
-			"configVersion": s.daemon.config.GetVersion(),
+			"configVersion": s.daemon.configManager.GetVersion(),
 		},
 	}
 }
@@ -304,7 +340,7 @@ func (s *Server) handleAppGet(params json.RawMessage) Response {
 		}
 	}
 
-	app, ok := s.daemon.config.GetAppConfig(req.Pkg)
+	app, ok := s.daemon.configManager.GetAppConfig(req.Pkg)
 	if !ok {
 		return Response{
 			Ok: false,
@@ -318,14 +354,13 @@ func (s *Server) handleAppGet(params json.RawMessage) Response {
 	return Response{
 		Ok: true,
 		Data: map[string]interface{}{
-			"pkg":           req.Pkg,
-			"app":           app,
+			"pkg": req.Pkg,
+			"app": app,
 			"counts": map[string]int{
 				"redirect": len(app.RedirectRules),
 				"readOnly": len(app.ReadOnlyRules),
-				"monitor":  len(app.MonitorPaths),
 			},
-			"configVersion": s.daemon.config.GetVersion(),
+			"configVersion": s.daemon.configManager.GetVersion(),
 		},
 	}
 }
@@ -345,7 +380,7 @@ func (s *Server) handleAppSet(params json.RawMessage) Response {
 		}
 	}
 
-	if err := s.daemon.config.SetAppConfig(req.Pkg, req.App); err != nil {
+	if err := s.daemon.configManager.SaveAppConfig(req.Pkg, req.App); err != nil {
 		return Response{
 			Ok: false,
 			Error: &ErrorInfo{
@@ -356,32 +391,21 @@ func (s *Server) handleAppSet(params json.RawMessage) Response {
 		}
 	}
 
-	// 保存到文件
-	if err := s.daemon.saveConfig(); err != nil {
-		return Response{
-			Ok: false,
-			Error: &ErrorInfo{
-				Code:    "E_CFG_WRITE",
-				Message: err.Error(),
-			},
-		}
-	}
-
 	return Response{
 		Ok: true,
 		Data: map[string]interface{}{
-			"configVersion": s.daemon.config.GetVersion(),
+			"configVersion": s.daemon.configManager.GetVersion(),
 		},
 	}
 }
 
 func (s *Server) handleAppList() Response {
-	apps := s.daemon.config.ListAppsWithRules()
+	apps := s.daemon.configManager.ListApps()
 	return Response{
 		Ok: true,
 		Data: map[string]interface{}{
 			"apps":          apps,
-			"configVersion": s.daemon.config.GetVersion(),
+			"configVersion": s.daemon.configManager.GetVersion(),
 		},
 	}
 }
@@ -400,10 +424,7 @@ func (s *Server) handleAppDelete(params json.RawMessage) Response {
 		}
 	}
 
-	s.daemon.config.DeleteAppConfig(req.Pkg)
-
-	// 保存到文件
-	if err := s.daemon.saveConfig(); err != nil {
+	if err := s.daemon.configManager.DeleteAppConfig(req.Pkg); err != nil {
 		return Response{
 			Ok: false,
 			Error: &ErrorInfo{
@@ -416,7 +437,7 @@ func (s *Server) handleAppDelete(params json.RawMessage) Response {
 	return Response{
 		Ok: true,
 		Data: map[string]interface{}{
-			"configVersion": s.daemon.config.GetVersion(),
+			"configVersion": s.daemon.configManager.GetVersion(),
 		},
 	}
 }
@@ -574,7 +595,7 @@ func (s *Server) handleDiagWhoami(params json.RawMessage) Response {
 				"packageName":      "",
 				"isIsolated":       false,
 				"resolutionReason": "UNKNOWN",
-				"ruleSetVersion":   s.daemon.config.GetVersion(),
+				"ruleSetVersion":   s.daemon.configManager.GetVersion(),
 			},
 		},
 	}

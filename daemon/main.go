@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -17,14 +16,14 @@ const (
 )
 
 type Daemon struct {
-	config     *Config
-	configPath string
-	logDir     string
-	socketPath string
-	server     *Server
-	logger     *Logger
-	ctx        context.Context
-	cancel     context.CancelFunc
+	configManager *ConfigManager
+	configDir     string
+	logDir        string
+	socketPath    string
+	server        *Server
+	logger        *Logger
+	ctx           context.Context
+	cancel        context.CancelFunc
 }
 
 func NewDaemon() (*Daemon, error) {
@@ -36,9 +35,9 @@ func NewDaemon() (*Daemon, error) {
 		modDir = "/data/adb/modules/StorageRedirect"
 	}
 
-	configPath := os.Getenv("SR_CONFIG")
-	if configPath == "" {
-		configPath = filepath.Join(modDir, "config", "config.json")
+	configDir := os.Getenv("SR_CONFIG_DIR")
+	if configDir == "" {
+		configDir = filepath.Join(modDir, "config")
 	}
 
 	logDir := os.Getenv("SR_LOGDIR")
@@ -68,19 +67,24 @@ func NewDaemon() (*Daemon, error) {
 		return nil, fmt.Errorf("failed to init logger: %w", err)
 	}
 
-	d := &Daemon{
-		configPath: configPath,
-		logDir:     logDir,
-		socketPath: socketPath,
-		logger:     logger,
-		ctx:        ctx,
-		cancel:     cancel,
+	// 初始化配置管理器
+	configManager, err := NewConfigManager(configDir)
+	if err != nil {
+		logger.Printf("Warning: failed to init config manager: %v, using default", err)
+		configManager, err = NewConfigManager(configDir)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create config manager: %w", err)
+		}
 	}
 
-	// 加载配置
-	if err := d.loadConfig(); err != nil {
-		logger.Printf("Warning: failed to load config: %v, using default", err)
-		d.config = DefaultConfig()
+	d := &Daemon{
+		configManager: configManager,
+		configDir:     configDir,
+		logDir:        logDir,
+		socketPath:    socketPath,
+		logger:        logger,
+		ctx:           ctx,
+		cancel:        cancel,
 	}
 
 	// 创建服务器
@@ -89,48 +93,9 @@ func NewDaemon() (*Daemon, error) {
 	return d, nil
 }
 
-func (d *Daemon) loadConfig() error {
-	data, err := os.ReadFile(d.configPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			d.config = DefaultConfig()
-			return d.saveConfig()
-		}
-		return err
-	}
-
-	var config Config
-	if err := json.Unmarshal(data, &config); err != nil {
-		return fmt.Errorf("invalid config: %w", err)
-	}
-
-	d.config = &config
-	return nil
-}
-
-func (d *Daemon) saveConfig() error {
-	// 确保配置目录存在
-	configDir := filepath.Dir(d.configPath)
-	if err := os.MkdirAll(configDir, 0755); err != nil {
-		return fmt.Errorf("failed to create config dir: %w", err)
-	}
-
-	data, err := json.MarshalIndent(d.config, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	// 写入临时文件后重命名，保证原子性
-	tmpPath := d.configPath + ".tmp"
-	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
-		return err
-	}
-
-	return os.Rename(tmpPath, d.configPath)
-}
-
 func (d *Daemon) Run() error {
 	d.logger.Printf("StorageRedirect Daemon v%s starting...", Version)
+	d.logger.Printf("Config directory: %s", d.configDir)
 
 	// 启动服务器
 	go func() {

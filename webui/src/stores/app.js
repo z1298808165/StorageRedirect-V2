@@ -347,6 +347,17 @@ export const useAppStore = defineStore('app', () => {
       case 'log stats':
         command += ' log stats'
         break
+      case 'monitor get':
+        command += ' monitor get'
+        break
+      case 'monitor set':
+        // 使用 base64 编码避免 shell 转义问题（支持 Unicode）
+        {
+          const jsonStr = JSON.stringify(params.monitor)
+          const base64Json = utf8ToBase64(jsonStr)
+          command += ` monitor set --json-base64 "${base64Json}"`
+        }
+        break
       default:
         throw new Error(`Unknown command: ${cmd}`)
     }
@@ -1063,16 +1074,23 @@ export const useAppStore = defineStore('app', () => {
 
   // 检查 Daemon 状态
   const checkDaemon = async () => {
+    console.log('【checkDaemon】开始检查 daemon 状态...')
+    
     // 如果已经在演示模式，直接返回
     if (isDemoMode.value) {
+      console.log('【checkDaemon】当前处于演示模式')
       daemonStatus.value = { online: true, version: '1.0.0-demo' }
       return true
     }
     
     try {
-      // 直接尝试 ping daemon，如果成功说明在真实环境
+      // 直接尝试 ping daemon
+      console.log('【checkDaemon】尝试 ping daemon...')
       const result = await callDaemon('ping')
+      console.log('【checkDaemon】ping 结果:', JSON.stringify(result))
+      
       if (result && result.ok) {
+        console.log('【checkDaemon】daemon 在线，版本:', result.version)
         daemonStatus.value = {
           online: true,
           version: result?.version || ''
@@ -1080,19 +1098,29 @@ export const useAppStore = defineStore('app', () => {
         // 确保退出演示模式
         isDemoMode.value = false
         return true
+      } else {
+        console.log('【checkDaemon】daemon 返回错误:', result?.error)
       }
     } catch (e) {
-      // ping 失败，检查是否是因为 API 不可用
-      const apiAvailable = await checkKsuApiAvailable()
-      if (!apiAvailable) {
-        // API 不可用，切换到演示模式
-        isDemoMode.value = true
-        daemonStatus.value = { online: true, version: '1.0.0-demo' }
-        return true
-      }
-      // API 可用但 daemon 不可用
-      daemonStatus.value = { online: false, version: '' }
+      console.error('【checkDaemon】ping 异常:', e)
     }
+    
+    // ping 失败，检查是否是因为 API 不可用
+    console.log('【checkDaemon】检查 KernelSU API 是否可用...')
+    const apiAvailable = await checkKsuApiAvailable()
+    console.log('【checkDaemon】API 可用性:', apiAvailable)
+    
+    if (!apiAvailable) {
+      // API 不可用，切换到演示模式
+      console.log('【checkDaemon】API 不可用，切换到演示模式')
+      isDemoMode.value = true
+      daemonStatus.value = { online: true, version: '1.0.0-demo' }
+      return true
+    }
+    
+    // API 可用但 daemon 不可用
+    console.log('【checkDaemon】API 可用但 daemon 不在线')
+    daemonStatus.value = { online: false, version: '' }
     return false
   }
 

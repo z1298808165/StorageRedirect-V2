@@ -1,19 +1,17 @@
 #include "config.h"
 #include <android/log.h>
-#include <sys/socket.h>
-#include <sys/un.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <json/json.h>
 #include <fstream>
+#include <dirent.h>
+#include <sys/stat.h>
 
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "StorageRedirect/Config", __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, "StorageRedirect/Config", __VA_ARGS__)
 
 namespace StorageRedirect {
 
-static const char *CONFIG_PATH = "/data/adb/modules/StorageRedirect/config/config.json";
-static const char *SOCKET_PATH = "/data/adb/modules/StorageRedirect/run/ipc.sock";
+static const char *APPS_CONFIG_DIR = "/data/adb/modules/StorageRedirect/config/apps";
+static const char *MONITOR_CONFIG_PATH = "/data/adb/modules/StorageRedirect/config/monitor_paths.json";
+static const char *GLOBAL_CONFIG_PATH = "/data/adb/modules/StorageRedirect/config/global.json";
 
 Config* Config::getInstance() {
     static Config instance;
@@ -21,152 +19,247 @@ Config* Config::getInstance() {
 }
 
 void Config::init() {
-    LOGD("Config initialized");
-    loadConfig();
-}
-
-void Config::loadConfig() {
     std::lock_guard<std::mutex> lock(m_mutex);
     
-    // 尝试从文件加载配置
-    std::ifstream file(CONFIG_PATH);
+    if (m_initialized) return;
+    
+    LOGD("Initializing config...");
+    
+    // 加载全局配置
+    loadGlobalConfig();
+    
+    // 加载监控路径配置
+    loadMonitorConfig();
+    
+    // 加载所有应用配置
+    loadAllAppConfigs();
+    
+    m_initialized = true;
+    LOGD("Config initialized, loaded %zu apps", m_appConfigs.size());
+}
+
+void Config::loadGlobalConfig() {
+    std::ifstream file(GLOBAL_CONFIG_PATH);
     if (!file.is_open()) {
-        LOGE("Failed to open config file: %s", CONFIG_PATH);
+        LOGD("Global config not found, using defaults");
+        m_globalConfig = getDefaultGlobalConfig();
         return;
     }
     
     try {
         Json::Value root;
-        Json::CharReaderBuilder builder;
-        std::string errors;
+        file >> root;
         
-        if (!Json::parseFromStream(builder, file, &root, &errors)) {
-            LOGE("Failed to parse config: %s", errors.c_str());
-            return;
+        m_globalConfig.monitorEnabled = root.get("monitorEnabled", true).asBool();
+        m_globalConfig.logLevel = root.get("logLevel", "info").asString();
+        m_globalConfig.maxLogSizeMB = root.get("maxLogSizeMB", 64).asInt();
+        
+        // 解析 update 配置
+        if (root.isMember("update")) {
+            const auto &update = root["update"];
+            m_globalConfig.update.pollIntervalMs = update.get("pollIntervalMs", 3000).asInt();
+            m_globalConfig.update.opCheckInterval = update.get("opCheckInterval", 50).asInt();
         }
         
-        m_configVersion = root.get("version", 0).asInt();
-        m_lastCheckedVersion = m_configVersion;
-        
-        // 解析应用列表
-        const Json::Value &apps = root["apps"];
-        m_hookedApps.clear();
-        for (const auto &member : apps.getMemberNames()) {
-            const Json::Value &app = apps[member];
-            if (app.get("enabled", false).asBool()) {
-                m_hookedApps.push_back(member);
-            }
+        // 解析 processAttribution 配置
+        if (root.isMember("processAttribution")) {
+            const auto &pa = root["processAttribution"];
+            m_globalConfig.processAttr.mode = pa.get("mode", "strict").asString();
+            m_globalConfig.processAttr.inheritToAllSameUid = pa.get("inheritToAllSameUid", true).asBool();
+            m_globalConfig.processAttr.inheritToIsolated = pa.get("inheritToIsolated", true).asBool();
+            m_globalConfig.processAttr.inheritToChildProcess = pa.get("inheritToChildProcess", true).asBool();
+            m_globalConfig.processAttr.fallbackUnknownPolicy = pa.get("fallbackUnknownPolicy", "denyWriteOnMatchedPaths").asString();
+            m_globalConfig.processAttr.diagnosticTagUnknown = pa.get("diagnosticTagUnknown", true).asBool();
         }
         
-        LOGD("Config loaded, version=%d, hooked apps=%zu", 
-             m_configVersion.load(), m_hookedApps.size());
+        // 解析 URI 配置
+        if (root.isMember("uri")) {
+            const auto &uri = root["uri"];
+            m_globalConfig.uri.redirectEnabled = uri.get("redirectEnabled", true).asBool();
+            m_globalConfig.uri.mappingMode = uri.get("mappingMode", "bestEffort").asString();
+            m_globalConfig.uri.onMappingFailed = uri.get("onMappingFailed", "enforceReadonlyAndMonitor").asString();
+            m_globalConfig.uri.logMappingDetails = uri.get("logMappingDetails", true).asBool();
+        }
+        
+        LOGD("Global config loaded");
     } catch (const std::exception &e) {
-        LOGE("Exception loading config: %s", e.what());
+        LOGE("Failed to parse global config: %s", e.what());
+        m_globalConfig = getDefaultGlobalConfig();
     }
 }
 
-bool Config::shouldHookApp(const std::string &processName, int uid) {
-    std::lock_guard<std::mutex> lock(m_mutex);
-    
-    // 检查是否在配置列表中
-    for (const auto &app : m_hookedApps) {
-        if (processName.find(app) != std::string::npos || app.find(processName) != std::string::npos) {
-            return true;
-        }
-    }
-    
-    return false;
-}
-
-AppConfig Config::getAppConfig(const std::string &processName) {
-    std::lock_guard<std::mutex> lock(m_mutex);
-    
-    AppConfig config;
-    
-    // 尝试从文件加载
-    std::ifstream file(CONFIG_PATH);
+void Config::loadMonitorConfig() {
+    std::ifstream file(MONITOR_CONFIG_PATH);
     if (!file.is_open()) {
-        return config;
+        LOGD("Monitor config not found, using empty");
+        m_monitorPaths.clear();
+        return;
     }
     
     try {
         Json::Value root;
-        Json::CharReaderBuilder builder;
-        std::string errors;
+        file >> root;
         
-        if (!Json::parseFromStream(builder, file, &root, &errors)) {
-            return config;
-        }
+        m_monitorPaths.clear();
         
-        // 查找应用配置
-        const Json::Value &apps = root["apps"];
-        std::string pkgName;
-        
-        // 尝试匹配进程名到包名
-        for (const auto &member : apps.getMemberNames()) {
-            if (processName.find(member) != std::string::npos || member.find(processName) != std::string::npos) {
-                pkgName = member;
-                break;
+        if (root.isMember("paths") && root["paths"].isArray()) {
+            const auto &paths = root["paths"];
+            for (const auto &path : paths) {
+                MonitorPath mp;
+                mp.id = path.get("id", 0).asInt64();
+                mp.path = path.get("path", "").asString();
+                mp.desc = path.get("desc", "").asString();
+                
+                if (path.isMember("operations") && path["operations"].isArray()) {
+                    const auto &ops = path["operations"];
+                    for (const auto &op : ops) {
+                        mp.ops.push_back(op.asString());
+                    }
+                }
+                
+                m_monitorPaths.push_back(mp);
             }
         }
         
-        if (pkgName.empty()) {
-            return config;
+        LOGD("Monitor config loaded, %zu paths", m_monitorPaths.size());
+    } catch (const std::exception &e) {
+        LOGE("Failed to parse monitor config: %s", e.what());
+        m_monitorPaths.clear();
+    }
+}
+
+void Config::loadAllAppConfigs() {
+    m_appConfigs.clear();
+    
+    DIR *dir = opendir(APPS_CONFIG_DIR);
+    if (!dir) {
+        LOGD("Apps config dir not found: %s", APPS_CONFIG_DIR);
+        return;
+    }
+    
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != nullptr) {
+        std::string filename = entry->d_name;
+        
+        // 检查是否是 .json 文件
+        if (filename.length() < 5 || 
+            filename.substr(filename.length() - 5) != ".json") {
+            continue;
         }
         
-        const Json::Value &app = apps[pkgName];
-        config.enabled = app.get("enabled", false).asBool();
+        // 提取包名
+        std::string pkg = filename.substr(0, filename.length() - 5);
+        
+        AppConfig config;
+        if (loadAppConfig(pkg, config)) {
+            // 合并监控路径到应用配置（用于兼容）
+            config.monitorPaths = m_monitorPaths;
+            config.monitorEnabled = m_globalConfig.monitorEnabled;
+            
+            m_appConfigs[pkg] = config;
+            LOGD("Loaded config for %s: enabled=%d, redirects=%zu, readonly=%zu",
+                 pkg.c_str(), config.enabled, 
+                 config.redirectRules.size(), 
+                 config.readOnlyRules.size());
+        }
+    }
+    
+    closedir(dir);
+}
+
+bool Config::loadAppConfig(const std::string &pkg, AppConfig &config) {
+    std::string path = std::string(APPS_CONFIG_DIR) + "/" + pkg + ".json";
+    std::ifstream file(path);
+    
+    if (!file.is_open()) {
+        return false;
+    }
+    
+    try {
+        Json::Value root;
+        file >> root;
+        
+        config.enabled = root.get("enabled", false).asBool();
         
         // 解析重定向规则
-        const Json::Value &redirectRules = app["redirectRules"];
-        for (const auto &rule : redirectRules) {
-            RedirectRule r;
-            r.src = rule.get("src", "").asString();
-            r.dst = rule.get("dst", "").asString();
-            if (!r.src.empty() && !r.dst.empty()) {
-                config.redirectRules.push_back(r);
+        config.redirectRules.clear();
+        if (root.isMember("redirectRules") && root["redirectRules"].isArray()) {
+            const auto &rules = root["redirectRules"];
+            for (const auto &rule : rules) {
+                RedirectRule r;
+                r.src = rule.get("src", "").asString();
+                r.dst = rule.get("dst", "").asString();
+                if (!r.src.empty() && !r.dst.empty()) {
+                    config.redirectRules.push_back(r);
+                }
             }
         }
         
         // 解析只读规则
-        const Json::Value &readOnlyRules = app["readOnlyRules"];
-        for (const auto &rule : readOnlyRules) {
-            ReadOnlyRule r;
-            r.path = rule.get("path", "").asString();
-            if (!r.path.empty()) {
-                config.readOnlyRules.push_back(r);
+        config.readOnlyRules.clear();
+        if (root.isMember("readOnlyRules") && root["readOnlyRules"].isArray()) {
+            const auto &rules = root["readOnlyRules"];
+            for (const auto &rule : rules) {
+                ReadOnlyRule r;
+                r.path = rule.get("path", "").asString();
+                if (!r.path.empty()) {
+                    config.readOnlyRules.push_back(r);
+                }
             }
         }
         
-        // 解析监控路径
-        const Json::Value &monitorPaths = app["monitorPaths"];
-        for (const auto &mp : monitorPaths) {
-            MonitorPath m;
-            m.path = mp.get("path", "").asString();
-            const Json::Value &ops = mp["ops"];
-            for (const auto &op : ops) {
-                m.ops.push_back(op.asString());
-            }
-            if (!m.path.empty()) {
-                config.monitorPaths.push_back(m);
-            }
-        }
-        
-        // 全局监控开关
-        const Json::Value &global = root["global"];
-        config.monitorEnabled = global.get("monitorEnabled", false).asBool();
-        
+        return true;
     } catch (const std::exception &e) {
-        LOGE("Exception getting app config: %s", e.what());
+        LOGE("Failed to parse app config for %s: %s", pkg.c_str(), e.what());
+        return false;
+    }
+}
+
+AppConfig Config::getAppConfig(const std::string &pkg) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    
+    auto it = m_appConfigs.find(pkg);
+    if (it != m_appConfigs.end()) {
+        return it->second;
     }
     
+    // 返回默认配置
+    AppConfig config;
+    config.enabled = false;
+    config.monitorPaths = m_monitorPaths;
+    config.monitorEnabled = m_globalConfig.monitorEnabled;
     return config;
 }
 
+bool Config::shouldHookApp(const std::string &processName, int uid) {
+    // 只 Hook 普通应用进程（uid >= 10000）
+    if (uid < 10000) {
+        return false;
+    }
+    
+    // 检查是否有此应用的配置
+    auto config = getAppConfig(processName);
+    
+    // 如果启用了或有规则，则 Hook
+    return config.enabled || 
+           !config.redirectRules.empty() || 
+           !config.readOnlyRules.empty();
+}
+
 void Config::checkUpdate() {
-    // 简化处理：直接从文件重新加载
-    // 实际应该通过 IPC 查询 daemon 的版本号
-    loadConfig();
+    // 简化处理：检查配置文件修改时间或版本号
+    // 实际应该通过 IPC 从 daemon 获取最新版本号
+    
+    // 这里仅作示例，实际实现需要与 daemon 通信
+    static int lastCheckTime = 0;
+    int currentTime = time(nullptr);
+    
+    if (currentTime - lastCheckTime < 5) {
+        return; // 5秒内不重复检查
+    }
+    lastCheckTime = currentTime;
+    
+    // TODO: 通过 IPC 获取 daemon 配置版本，如有更新则重新加载
 }
 
 std::string Config::normalizePath(const std::string &path) {
@@ -180,52 +273,55 @@ std::string Config::normalizePath(const std::string &path) {
         result.erase(pos, 1);
     }
     
-    // 处理 . 和 ..
-    std::vector<std::string> components;
-    std::stringstream ss(result);
-    std::string component;
-    
-    while (std::getline(ss, component, '/')) {
-        if (component == "" || component == ".") {
-            continue;
-        } else if (component == "..") {
-            if (!components.empty()) {
-                components.pop_back();
-            }
-        } else {
-            components.push_back(component);
+    // 确保目录以 / 结尾（用于前缀匹配）
+    struct stat st;
+    if (stat(result.c_str(), &st) == 0 && S_ISDIR(st.st_mode)) {
+        if (result.back() != '/') {
+            result += '/';
         }
-    }
-    
-    result = "/";
-    for (size_t i = 0; i < components.size(); i++) {
-        if (i > 0) result += "/";
-        result += components[i];
-    }
-    
-    // 确保目录以 / 结尾
-    if (path.back() == '/' && result.back() != '/' && result != "/") {
-        result += "/";
     }
     
     return result;
 }
 
 bool Config::pathMatches(const std::string &path, const std::string &pattern) {
-    std::string normPath = normalizePath(path);
-    std::string normPattern = normalizePath(pattern);
+    // 简单的前缀匹配
+    // pattern 应该以 / 结尾表示目录前缀匹配
     
-    // 确保 pattern 以 / 结尾表示目录匹配
-    if (normPattern.back() != '/') {
-        normPattern += "/";
+    std::string normalizedPath = normalizePath(path);
+    std::string normalizedPattern = normalizePath(pattern);
+    
+    // 确保 pattern 以 / 结尾（前缀匹配）
+    if (normalizedPattern.back() != '/') {
+        normalizedPattern += '/';
     }
     
     // 检查 path 是否以 pattern 开头
-    if (normPath.length() < normPattern.length()) {
+    if (normalizedPath.length() < normalizedPattern.length()) {
         return false;
     }
     
-    return normPath.compare(0, normPattern.length(), normPattern) == 0;
+    return normalizedPath.compare(0, normalizedPattern.length(), normalizedPattern) == 0;
+}
+
+GlobalConfig Config::getDefaultGlobalConfig() {
+    GlobalConfig config;
+    config.monitorEnabled = true;
+    config.logLevel = "info";
+    config.maxLogSizeMB = 64;
+    config.update.pollIntervalMs = 3000;
+    config.update.opCheckInterval = 50;
+    config.processAttr.mode = "strict";
+    config.processAttr.inheritToAllSameUid = true;
+    config.processAttr.inheritToIsolated = true;
+    config.processAttr.inheritToChildProcess = true;
+    config.processAttr.fallbackUnknownPolicy = "denyWriteOnMatchedPaths";
+    config.processAttr.diagnosticTagUnknown = true;
+    config.uri.redirectEnabled = true;
+    config.uri.mappingMode = "bestEffort";
+    config.uri.onMappingFailed = "enforceReadonlyAndMonitor";
+    config.uri.logMappingDetails = true;
+    return config;
 }
 
 } // namespace StorageRedirect

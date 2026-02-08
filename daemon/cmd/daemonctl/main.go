@@ -63,6 +63,8 @@ func main() {
 		resp, err = sendCommand(socketPath, "status", nil)
 	case "global", "g":
 		resp, err = handleGlobalCmd(socketPath, os.Args[2:])
+	case "monitor", "m":
+		resp, err = handleMonitorCmd(socketPath, os.Args[2:])
 	case "app", "a":
 		resp, err = handleAppCmd(socketPath, os.Args[2:])
 	case "log", "l":
@@ -88,6 +90,59 @@ func main() {
 	// 输出结果 - 输出完整的响应对象，包含 ok 和 data 字段
 	output, _ := json.MarshalIndent(resp, "", "  ")
 	fmt.Println(string(output))
+}
+
+func handleMonitorCmd(socketPath string, args []string) (*Response, error) {
+	if len(args) < 1 {
+		fmt.Fprintf(os.Stderr, "用法: daemonctl monitor <get|set> [--json '<json>'] [--json-base64 '<base64>']\n")
+		os.Exit(2)
+	}
+
+	subCmd := args[0]
+	params := make(map[string]interface{})
+
+	// 解析参数
+	for i := 1; i < len(args); i++ {
+		switch args[i] {
+		case "--json", "-j":
+			if i+1 < len(args) {
+				var monitor map[string]interface{}
+				if err := json.Unmarshal([]byte(args[i+1]), &monitor); err != nil {
+					return nil, fmt.Errorf("invalid JSON: %w", err)
+				}
+				params["monitor"] = monitor
+				i++
+			}
+		case "--json-base64":
+			if i+1 < len(args) {
+				jsonBytes, err := base64.StdEncoding.DecodeString(args[i+1])
+				if err != nil {
+					return nil, fmt.Errorf("invalid base64: %w", err)
+				}
+				var monitor map[string]interface{}
+				if err := json.Unmarshal(jsonBytes, &monitor); err != nil {
+					return nil, fmt.Errorf("invalid JSON: %w", err)
+				}
+				params["monitor"] = monitor
+				i++
+			}
+		}
+	}
+
+	switch subCmd {
+	case "get":
+		return sendCommand(socketPath, "monitor.get", nil)
+	case "set":
+		if params["monitor"] == nil {
+			fmt.Fprintf(os.Stderr, "缺少 --json 或 --json-base64 参数\n")
+			os.Exit(2)
+		}
+		return sendCommand(socketPath, "monitor.set", params)
+	default:
+		fmt.Fprintf(os.Stderr, "未知子命令: %s\n", subCmd)
+		os.Exit(2)
+	}
+	return nil, nil
 }
 
 func handleGlobalCmd(socketPath string, args []string) (*Response, error) {
@@ -395,6 +450,7 @@ func printUsage() {
 	fmt.Println("  ping                    检查 daemon 状态")
 	fmt.Println("  status                  获取详细状态")
 	fmt.Println("  global <get|set>        全局配置管理")
+	fmt.Println("  monitor <get|set>       监控路径配置管理")
 	fmt.Println("  app <get|set|list|delete> [--pkg <pkg>] [--json '<json>']  应用配置管理")
 	fmt.Println("  log <tail|query|clear|stats> [--pkg <pkg>]  日志管理")
 	fmt.Println("  diag whoami [--pid <pid>]  诊断工具")
@@ -403,6 +459,7 @@ func printUsage() {
 	fmt.Println("  daemonctl ping")
 	fmt.Println("  daemonctl app get --pkg com.example.app")
 	fmt.Println("  daemonctl app set --pkg com.example.app --json '{\"enabled\":true,\"redirectRules\":[]}'")
+	fmt.Println("  daemonctl monitor get")
 	fmt.Println("  daemonctl log tail --pkg com.example.app --n 20")
 }
 

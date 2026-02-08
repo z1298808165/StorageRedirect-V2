@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <cstring>
+#include <dobby.h>
 
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "StorageRedirect/Hook", __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, "StorageRedirect/Hook", __VA_ARGS__)
@@ -14,25 +15,15 @@
 namespace StorageRedirect {
 
 // 原始函数指针
-typedef int (*orig_open_func)(const char *, int, ...);
-typedef int (*orig_openat_func)(int, const char *, int, ...);
-typedef int (*orig_access_func)(const char *, int);
-typedef int (*orig_stat_func)(const char *, struct stat *);
-typedef int (*orig_lstat_func)(const char *, struct stat *);
-typedef int (*orig_rename_func)(const char *, const char *);
-typedef int (*orig_unlink_func)(const char *);
-typedef int (*orig_mkdir_func)(const char *, mode_t);
-typedef int (*orig_rmdir_func)(const char *);
-
-static orig_open_func orig_open = nullptr;
-static orig_openat_func orig_openat = nullptr;
-static orig_access_func orig_access = nullptr;
-static orig_stat_func orig_stat = nullptr;
-static orig_lstat_func orig_lstat = nullptr;
-static orig_rename_func orig_rename = nullptr;
-static orig_unlink_func orig_unlink = nullptr;
-static orig_mkdir_func orig_mkdir = nullptr;
-static orig_rmdir_func orig_rmdir = nullptr;
+static int (*orig_open)(const char *, int, ...) = nullptr;
+static int (*orig_openat)(int, const char *, int, ...) = nullptr;
+static int (*orig_access)(const char *, int) = nullptr;
+static int (*orig_stat)(const char *, struct stat *) = nullptr;
+static int (*orig_lstat)(const char *, struct stat *) = nullptr;
+static int (*orig_rename)(const char *, const char *) = nullptr;
+static int (*orig_unlink)(const char *) = nullptr;
+static int (*orig_mkdir)(const char *, mode_t) = nullptr;
+static int (*orig_rmdir)(const char *) = nullptr;
 
 HookManager* HookManager::getInstance() {
     static HookManager instance;
@@ -61,19 +52,63 @@ void HookManager::installHooks() {
 void HookManager::installNativeHooks() {
     LOGD("Installing native hooks...");
     
-    // 获取原始函数地址
-    orig_open = (orig_open_func)dlsym(RTLD_NEXT, "open");
-    orig_openat = (orig_openat_func)dlsym(RTLD_NEXT, "openat");
-    orig_access = (orig_access_func)dlsym(RTLD_NEXT, "access");
-    orig_stat = (orig_stat_func)dlsym(RTLD_NEXT, "stat");
-    orig_lstat = (orig_lstat_func)dlsym(RTLD_NEXT, "lstat");
-    orig_rename = (orig_rename_func)dlsym(RTLD_NEXT, "rename");
-    orig_unlink = (orig_unlink_func)dlsym(RTLD_NEXT, "unlink");
-    orig_mkdir = (orig_mkdir_func)dlsym(RTLD_NEXT, "mkdir");
-    orig_rmdir = (orig_rmdir_func)dlsym(RTLD_NEXT, "rmdir");
+    // 获取原始函数地址并安装 Hook
+    void *target_open = dlsym(RTLD_NEXT, "open");
+    void *target_openat = dlsym(RTLD_NEXT, "openat");
+    void *target_access = dlsym(RTLD_NEXT, "access");
+    void *target_stat = dlsym(RTLD_NEXT, "stat");
+    void *target_lstat = dlsym(RTLD_NEXT, "lstat");
+    void *target_rename = dlsym(RTLD_NEXT, "rename");
+    void *target_unlink = dlsym(RTLD_NEXT, "unlink");
+    void *target_mkdir = dlsym(RTLD_NEXT, "mkdir");
+    void *target_rmdir = dlsym(RTLD_NEXT, "rmdir");
     
-    // 使用 PLT Hook 或 Inline Hook 替换函数
-    // 这里简化处理，实际需要使用如 Dobby 等 Hook 框架
+    // 使用 Dobby 安装 Hook
+    if (target_open) {
+        DobbyHook(target_open, (void *)hooked_open, (void **)&orig_open);
+        LOGD("Hooked open");
+    }
+    
+    if (target_openat) {
+        DobbyHook(target_openat, (void *)hooked_openat, (void **)&orig_openat);
+        LOGD("Hooked openat");
+    }
+    
+    if (target_access) {
+        DobbyHook(target_access, (void *)hooked_access, (void **)&orig_access);
+        LOGD("Hooked access");
+    }
+    
+    if (target_stat) {
+        DobbyHook(target_stat, (void *)hooked_stat, (void **)&orig_stat);
+        LOGD("Hooked stat");
+    }
+    
+    if (target_lstat) {
+        DobbyHook(target_lstat, (void *)hooked_lstat, (void **)&orig_lstat);
+        LOGD("Hooked lstat");
+    }
+    
+    if (target_rename) {
+        DobbyHook(target_rename, (void *)hooked_rename, (void **)&orig_rename);
+        LOGD("Hooked rename");
+    }
+    
+    if (target_unlink) {
+        DobbyHook(target_unlink, (void *)hooked_unlink, (void **)&orig_unlink);
+        LOGD("Hooked unlink");
+    }
+    
+    if (target_mkdir) {
+        DobbyHook(target_mkdir, (void *)hooked_mkdir, (void **)&orig_mkdir);
+        LOGD("Hooked mkdir");
+    }
+    
+    if (target_rmdir) {
+        DobbyHook(target_rmdir, (void *)hooked_rmdir, (void **)&orig_rmdir);
+        LOGD("Hooked rmdir");
+    }
+    
     LOGD("Native hooks installed");
 }
 
@@ -82,6 +117,7 @@ void HookManager::installJavaHooks() {
     
     // Hook Java 层的文件操作类
     // 如 java.io.File, java.io.FileInputStream, java.io.FileOutputStream 等
+    // 这里简化处理，实际需要通过 JNI Hook
     
     LOGD("Java hooks installed");
 }
@@ -211,7 +247,7 @@ void HookManager::checkConfigUpdate() {
 
 // Hook 函数实现
 
-extern "C" int open(const char *pathname, int flags, ...) {
+int hooked_open(const char *pathname, int flags, ...) {
     mode_t mode = 0;
     if (flags & O_CREAT) {
         va_list args;
@@ -246,7 +282,7 @@ extern "C" int open(const char *pathname, int flags, ...) {
     return ret;
 }
 
-extern "C" int openat(int dirfd, const char *pathname, int flags, ...) {
+int hooked_openat(int dirfd, const char *pathname, int flags, ...) {
     mode_t mode = 0;
     if (flags & O_CREAT) {
         va_list args;
@@ -288,7 +324,52 @@ extern "C" int openat(int dirfd, const char *pathname, int flags, ...) {
     return orig_openat(dirfd, pathname, flags);
 }
 
-extern "C" int rename(const char *oldpath, const char *newpath) {
+int hooked_access(const char *pathname, int mode) {
+    auto *hook = HookManager::getInstance();
+    auto result = hook->processPath(pathname, Operation::ACCESS);
+    
+    const char *actualPath = result.decision == Decision::REDIRECT ? 
+                             result.mappedPath.c_str() : pathname;
+    
+    int ret = orig_access(actualPath, mode);
+    int saved_errno = errno;
+    hook->logOperation(Operation::ACCESS, pathname, result, ret < 0 ? saved_errno : 0);
+    
+    errno = saved_errno;
+    return ret;
+}
+
+int hooked_stat(const char *pathname, struct stat *statbuf) {
+    auto *hook = HookManager::getInstance();
+    auto result = hook->processPath(pathname, Operation::STAT);
+    
+    const char *actualPath = result.decision == Decision::REDIRECT ? 
+                             result.mappedPath.c_str() : pathname;
+    
+    int ret = orig_stat(actualPath, statbuf);
+    int saved_errno = errno;
+    hook->logOperation(Operation::STAT, pathname, result, ret < 0 ? saved_errno : 0);
+    
+    errno = saved_errno;
+    return ret;
+}
+
+int hooked_lstat(const char *pathname, struct stat *statbuf) {
+    auto *hook = HookManager::getInstance();
+    auto result = hook->processPath(pathname, Operation::STAT);
+    
+    const char *actualPath = result.decision == Decision::REDIRECT ? 
+                             result.mappedPath.c_str() : pathname;
+    
+    int ret = orig_lstat(actualPath, statbuf);
+    int saved_errno = errno;
+    hook->logOperation(Operation::STAT, pathname, result, ret < 0 ? saved_errno : 0);
+    
+    errno = saved_errno;
+    return ret;
+}
+
+int hooked_rename(const char *oldpath, const char *newpath) {
     auto *hook = HookManager::getInstance();
     auto result = hook->processPath(oldpath, Operation::RENAME);
     
@@ -305,7 +386,7 @@ extern "C" int rename(const char *oldpath, const char *newpath) {
     return ret;
 }
 
-extern "C" int unlink(const char *pathname) {
+int hooked_unlink(const char *pathname) {
     auto *hook = HookManager::getInstance();
     auto result = hook->processPath(pathname, Operation::UNLINK);
     
@@ -322,7 +403,7 @@ extern "C" int unlink(const char *pathname) {
     return ret;
 }
 
-extern "C" int mkdir(const char *pathname, mode_t mode) {
+int hooked_mkdir(const char *pathname, mode_t mode) {
     auto *hook = HookManager::getInstance();
     auto result = hook->processPath(pathname, Operation::MKDIR);
     
@@ -339,7 +420,7 @@ extern "C" int mkdir(const char *pathname, mode_t mode) {
     return ret;
 }
 
-extern "C" int rmdir(const char *pathname) {
+int hooked_rmdir(const char *pathname) {
     auto *hook = HookManager::getInstance();
     auto result = hook->processPath(pathname, Operation::RMDIR);
     
