@@ -561,92 +561,236 @@ export const useAppStore = defineStore('app', () => {
     ksuApi.toast('已加载演示数据')
   }
 
-  // 配置文件路径
-  const CONFIG_PATH = '/data/adb/modules/StorageRedirect/config/config.json'
+  // 配置文件路径 - 新的分散式配置结构
+  const CONFIG_DIR = '/data/adb/modules/StorageRedirect/config'
+  const APPS_CONFIG_DIR = `${CONFIG_DIR}/apps`
+  const GLOBAL_CONFIG_PATH = `${CONFIG_DIR}/global.json`
+  const MONITOR_CONFIG_PATH = `${CONFIG_DIR}/monitor_paths.json`
 
-  // 直接读取配置文件（备用方案）
-  const readConfigFile = async () => {
-    console.log('【readConfigFile】开始读取配置文件:', CONFIG_PATH)
+  // 读取全局配置
+  const readGlobalConfigFile = async () => {
+    console.log('【readGlobalConfigFile】开始读取全局配置:', GLOBAL_CONFIG_PATH)
     try {
-      const result = await ksuApi.exec(`cat ${CONFIG_PATH} 2>/dev/null || echo '{"version":1,"global":{},"apps":{}}'`)
-      console.log('【readConfigFile】命令执行结果:', JSON.stringify(result))
+      const result = await ksuApi.exec(`cat ${GLOBAL_CONFIG_PATH} 2>/dev/null || echo '{}'`)
       if (result && result.stdout) {
         const parsed = JSON.parse(result.stdout)
-        console.log('【readConfigFile】解析后的配置:', JSON.stringify(parsed, null, 2))
-        console.log('【readConfigFile】配置包含 apps 数量:', Object.keys(parsed.apps || {}).length)
+        console.log('【readGlobalConfigFile】解析后的配置:', JSON.stringify(parsed, null, 2))
         return parsed
       }
     } catch (e) {
-      console.error('【readConfigFile】读取失败:', e)
+      console.error('【readGlobalConfigFile】读取失败:', e)
     }
-    console.log('【readConfigFile】返回默认配置')
-    return { version: 1, global: {}, apps: {} }
+    return {}
   }
 
-  // 直接写入配置文件（备用方案）
-  const writeConfigFile = async (config) => {
+  // 写入全局配置
+  const writeGlobalConfigFile = async (config) => {
     try {
       const configJson = JSON.stringify(config, null, 2)
-      console.log('writeConfigFile: configJson length:', configJson.length)
-      // 使用 base64 编码避免 shell 转义问题（支持 Unicode）
       const base64Json = utf8ToBase64(configJson)
-      console.log('writeConfigFile: base64Json length:', base64Json.length)
 
-      // 先创建配置目录
-      const configDir = CONFIG_PATH.substring(0, CONFIG_PATH.lastIndexOf('/'))
-      const mkdirResult = await ksuApi.exec(`mkdir -p ${configDir}`)
-      console.log('writeConfigFile: mkdir result:', JSON.stringify(mkdirResult))
+      // 创建配置目录
+      const mkdirResult = await ksuApi.exec(`mkdir -p ${CONFIG_DIR}`)
       if (!mkdirResult || mkdirResult.errno !== 0) {
-        console.error('writeConfigFile: mkdir failed:', mkdirResult?.stderr)
+        console.error('writeGlobalConfigFile: mkdir failed:', mkdirResult?.stderr)
         return false
       }
 
-      // 使用 base64 编码直接写入文件
-      // 方法：将 base64 内容通过 echo 管道到 base64 -d 解码后写入文件
-      const tempFile = '/tmp/sr_config_base64.tmp'
-
-      // 分两步：先将 base64 内容写入临时文件（使用 echo -n 避免自动添加换行）
-      // 使用双引号包裹，并对 $ 进行转义
+      // 使用 base64 编码写入文件
+      const tempFile = '/tmp/sr_global_config_base64.tmp'
       const escapedBase64 = base64Json.replace(/\$/g, '\\$').replace(/`/g, '\\`')
       const writeCmd = `echo -n "${escapedBase64}" > ${tempFile}`
-      console.log('writeConfigFile: writeCmd length:', writeCmd.length)
       const writeTempResult = await ksuApi.exec(writeCmd)
-      console.log('writeConfigFile: write temp result:', JSON.stringify(writeTempResult))
 
       if (!writeTempResult || writeTempResult.errno !== 0) {
-        console.error('writeConfigFile: write temp failed:', writeTempResult?.stderr)
         return false
       }
 
-      // 验证临时文件内容
-      const verifyTempResult = await ksuApi.exec(`cat ${tempFile} | head -c 50`)
-      console.log('writeConfigFile: temp file preview:', JSON.stringify(verifyTempResult))
-
-      // 解码 base64 到目标文件
-      const decodeResult = await ksuApi.exec(`base64 -d ${tempFile} > ${CONFIG_PATH}`)
-      console.log('writeConfigFile: decode result:', JSON.stringify(decodeResult))
-
-      // 删除临时文件
+      const decodeResult = await ksuApi.exec(`base64 -d ${tempFile} > ${GLOBAL_CONFIG_PATH}`)
       await ksuApi.exec(`rm -f ${tempFile}`)
 
-      if (decodeResult && decodeResult.errno === 0) {
-        // 验证文件是否写入成功
-        const verifyResult = await ksuApi.exec(`cat ${CONFIG_PATH} | head -c 100`)
-        console.log('writeConfigFile: verify result:', JSON.stringify(verifyResult))
-        if (verifyResult && verifyResult.stdout && verifyResult.stdout.includes('version')) {
-          console.log('writeConfigFile: success and verified')
-          return true
-        } else {
-          console.error('writeConfigFile: verification failed')
-          return false
-        }
-      } else {
-        console.error('writeConfigFile: failed, errno:', decodeResult?.errno, 'stderr:', decodeResult?.stderr)
+      return decodeResult && decodeResult.errno === 0
+    } catch (e) {
+      console.error('writeGlobalConfigFile: exception:', e)
+      return false
+    }
+  }
+
+  // 读取监控路径配置
+  const readMonitorConfigFile = async () => {
+    console.log('【readMonitorConfigFile】开始读取监控配置:', MONITOR_CONFIG_PATH)
+    try {
+      const result = await ksuApi.exec(`cat ${MONITOR_CONFIG_PATH} 2>/dev/null || echo '{"paths":[]}'`)
+      if (result && result.stdout) {
+        const parsed = JSON.parse(result.stdout)
+        console.log('【readMonitorConfigFile】解析后的配置:', JSON.stringify(parsed, null, 2))
+        return parsed
       }
     } catch (e) {
-      console.error('writeConfigFile: exception:', e)
+      console.error('【readMonitorConfigFile】读取失败:', e)
     }
-    return false
+    return { paths: [] }
+  }
+
+  // 写入监控路径配置
+  const writeMonitorConfigFile = async (config) => {
+    try {
+      const configJson = JSON.stringify(config, null, 2)
+      const base64Json = utf8ToBase64(configJson)
+
+      const mkdirResult = await ksuApi.exec(`mkdir -p ${CONFIG_DIR}`)
+      if (!mkdirResult || mkdirResult.errno !== 0) {
+        return false
+      }
+
+      const tempFile = '/tmp/sr_monitor_config_base64.tmp'
+      const escapedBase64 = base64Json.replace(/\$/g, '\\$').replace(/`/g, '\\`')
+      const writeCmd = `echo -n "${escapedBase64}" > ${tempFile}`
+      const writeTempResult = await ksuApi.exec(writeCmd)
+
+      if (!writeTempResult || writeTempResult.errno !== 0) {
+        return false
+      }
+
+      const decodeResult = await ksuApi.exec(`base64 -d ${tempFile} > ${MONITOR_CONFIG_PATH}`)
+      await ksuApi.exec(`rm -f ${tempFile}`)
+
+      return decodeResult && decodeResult.errno === 0
+    } catch (e) {
+      console.error('writeMonitorConfigFile: exception:', e)
+      return false
+    }
+  }
+
+  // 读取单个应用配置
+  const readAppConfigFile = async (pkg) => {
+    const appConfigPath = `${APPS_CONFIG_DIR}/${pkg}.json`
+    console.log('【readAppConfigFile】开始读取应用配置:', appConfigPath)
+    try {
+      const result = await ksuApi.exec(`cat ${appConfigPath} 2>/dev/null || echo '{}'`)
+      if (result && result.stdout && result.stdout.trim() !== '{}') {
+        const parsed = JSON.parse(result.stdout)
+        console.log('【readAppConfigFile】解析后的配置:', JSON.stringify(parsed, null, 2))
+        return parsed
+      }
+    } catch (e) {
+      console.error('【readAppConfigFile】读取失败:', e)
+    }
+    return null
+  }
+
+  // 写入单个应用配置
+  const writeAppConfigFile = async (pkg, config) => {
+    try {
+      const configJson = JSON.stringify(config, null, 2)
+      const base64Json = utf8ToBase64(configJson)
+
+      // 创建应用配置目录
+      const mkdirResult = await ksuApi.exec(`mkdir -p ${APPS_CONFIG_DIR}`)
+      if (!mkdirResult || mkdirResult.errno !== 0) {
+        return false
+      }
+
+      const appConfigPath = `${APPS_CONFIG_DIR}/${pkg}.json`
+      const tempFile = '/tmp/sr_app_config_base64.tmp'
+      const escapedBase64 = base64Json.replace(/\$/g, '\\$').replace(/`/g, '\\`')
+      const writeCmd = `echo -n "${escapedBase64}" > ${tempFile}`
+      const writeTempResult = await ksuApi.exec(writeCmd)
+
+      if (!writeTempResult || writeTempResult.errno !== 0) {
+        return false
+      }
+
+      const decodeResult = await ksuApi.exec(`base64 -d ${tempFile} > ${appConfigPath}`)
+      await ksuApi.exec(`rm -f ${tempFile}`)
+
+      return decodeResult && decodeResult.errno === 0
+    } catch (e) {
+      console.error('writeAppConfigFile: exception:', e)
+      return false
+    }
+  }
+
+  // 删除应用配置
+  const deleteAppConfigFile = async (pkg) => {
+    try {
+      const appConfigPath = `${APPS_CONFIG_DIR}/${pkg}.json`
+      const result = await ksuApi.exec(`rm -f ${appConfigPath}`)
+      return result && result.errno === 0
+    } catch (e) {
+      console.error('deleteAppConfigFile: exception:', e)
+      return false
+    }
+  }
+
+  // 获取所有应用配置列表（扫描目录）
+  const listAppConfigs = async () => {
+    console.log('【listAppConfigs】扫描应用配置目录:', APPS_CONFIG_DIR)
+    try {
+      const result = await ksuApi.exec(`ls ${APPS_CONFIG_DIR}/*.json 2>/dev/null || echo ''`)
+      if (result && result.stdout) {
+        const files = result.stdout.trim().split('\n').filter(f => f.endsWith('.json'))
+        const configs = {}
+        for (const file of files) {
+          const pkg = file.split('/').pop().replace('.json', '')
+          const config = await readAppConfigFile(pkg)
+          if (config) {
+            configs[pkg] = {
+              ...config,
+              enabled: config.enabled === true,
+              redirectRules: Array.isArray(config.redirectRules) ? config.redirectRules : [],
+              readOnlyRules: Array.isArray(config.readOnlyRules) ? config.readOnlyRules : []
+            }
+          }
+        }
+        console.log('【listAppConfigs】找到应用配置数量:', Object.keys(configs).length)
+        return configs
+      }
+    } catch (e) {
+      console.error('【listAppConfigs】失败:', e)
+    }
+    return {}
+  }
+
+  // 兼容旧代码：readConfigFile 读取合并后的配置
+  const readConfigFile = async () => {
+    console.log('【readConfigFile】读取分散式配置并合并')
+    try {
+      const [global, monitor, apps] = await Promise.all([
+        readGlobalConfigFile(),
+        readMonitorConfigFile(),
+        listAppConfigs()
+      ])
+      return {
+        version: 1,
+        global: {
+          ...global,
+          monitorPaths: monitor.paths || []
+        },
+        apps
+      }
+    } catch (e) {
+      console.error('【readConfigFile】失败:', e)
+      return { version: 1, global: {}, apps: {} }
+    }
+  }
+
+  // 兼容旧代码：writeConfigFile 写入分散式配置
+  const writeConfigFile = async (config) => {
+    try {
+      const results = await Promise.all([
+        writeGlobalConfigFile(config.global || {}),
+        writeMonitorConfigFile({ paths: config.global?.monitorPaths || [] }),
+        // 应用配置单独写入
+        ...(Object.entries(config.apps || {}).map(([pkg, appConfig]) => 
+          writeAppConfigFile(pkg, appConfig)
+        ))
+      ])
+      return results.every(r => r)
+    } catch (e) {
+      console.error('writeConfigFile: exception:', e)
+      return false
+    }
   }
 
   // 加载应用配置列表
@@ -656,28 +800,14 @@ export const useAppStore = defineStore('app', () => {
       return
     }
 
-    // 备用方案：直接读取配置文件（优先使用直接读取，确保获取完整配置）
+    // 优先使用新的分散式配置读取
     try {
-      const config = await readConfigFile()
-      if (config && config.apps) {
-        // 确保每个应用的配置都有正确的结构
-        const normalizedConfigs = {}
-        Object.entries(config.apps).forEach(([pkg, appConfig]) => {
-          // 先展开原始配置，再用默认值覆盖 null/undefined
-          normalizedConfigs[pkg] = {
-            ...appConfig,
-            enabled: appConfig.enabled === true,
-            redirectRules: Array.isArray(appConfig.redirectRules) ? appConfig.redirectRules : [],
-            readOnlyRules: Array.isArray(appConfig.readOnlyRules) ? appConfig.readOnlyRules : [],
-            monitorPaths: Array.isArray(appConfig.monitorPaths) ? appConfig.monitorPaths : []
-          }
-        })
-        appConfigs.value = normalizedConfigs
-        console.log('loadAppConfigs: loaded from file, apps count:', Object.keys(normalizedConfigs).length)
-        return
-      }
+      const configs = await listAppConfigs()
+      appConfigs.value = configs
+      console.log('loadAppConfigs: loaded from new config structure, apps count:', Object.keys(configs).length)
+      return
     } catch (e) {
-      console.log('Direct file read failed, trying daemon:', e)
+      console.log('New config read failed, trying daemon:', e)
     }
 
     // 尝试通过 daemon 获取
@@ -685,17 +815,18 @@ export const useAppStore = defineStore('app', () => {
       const result = await callDaemon('app list')
       if (result && result.ok && result.apps) {
         const configs = {}
-        result.apps.forEach(app => {
-          // daemon 返回的可能是简化版配置，需要获取完整配置
-          // 先展开原始配置，再用默认值覆盖 null/undefined
-          configs[app.pkg] = {
-            ...app,
-            enabled: app.enabled === true,
-            redirectRules: Array.isArray(app.redirectRules) ? app.redirectRules : [],
-            readOnlyRules: Array.isArray(app.readOnlyRules) ? app.readOnlyRules : [],
-            monitorPaths: Array.isArray(app.monitorPaths) ? app.monitorPaths : []
+        for (const app of result.apps) {
+          // daemon 返回的是简化版配置，需要获取完整配置
+          const fullConfig = await callDaemon('app get', { pkg: app.pkg })
+          if (fullConfig && fullConfig.ok && fullConfig.app) {
+            configs[app.pkg] = {
+              ...fullConfig.app,
+              enabled: fullConfig.app.enabled === true,
+              redirectRules: Array.isArray(fullConfig.app.redirectRules) ? fullConfig.app.redirectRules : [],
+              readOnlyRules: Array.isArray(fullConfig.app.readOnlyRules) ? fullConfig.app.readOnlyRules : []
+            }
           }
-        })
+        }
         appConfigs.value = configs
         console.log('loadAppConfigs: loaded from daemon, apps count:', Object.keys(configs).length)
         return
@@ -734,18 +865,21 @@ export const useAppStore = defineStore('app', () => {
       console.log('【loadGlobalConfig】daemon 获取失败:', e)
     }
 
-    // 备用方案：直接读取配置文件
+    // 备用方案：直接读取分散式配置文件
     console.log('【loadGlobalConfig】使用备用方案：直接读取配置文件...')
     try {
-      const config = await readConfigFile()
-      console.log('【loadGlobalConfig】读取到的完整配置:', JSON.stringify(config, null, 2))
+      const [global, monitor] = await Promise.all([
+        readGlobalConfigFile(),
+        readMonitorConfigFile()
+      ])
       
-      if (config && config.global) {
-        globalConfig.value = config.global
-        console.log('【loadGlobalConfig】从文件加载成功:', JSON.stringify(globalConfig.value, null, 2))
-      } else {
-        console.log('【loadGlobalConfig】配置文件中没有 global 字段')
+      // 合并全局配置和监控路径
+      globalConfig.value = {
+        ...global,
+        monitorPaths: monitor.paths || []
       }
+      
+      console.log('【loadGlobalConfig】从文件加载成功:', JSON.stringify(globalConfig.value, null, 2))
       console.log('========== loadGlobalConfig 完成（文件）==========')
     } catch (e) {
       console.error('【loadGlobalConfig】读取文件失败:', e)
@@ -759,37 +893,34 @@ export const useAppStore = defineStore('app', () => {
       return demoConfigs[pkg] || null
     }
 
-    // 首先尝试直接读取配置文件（优先使用文件读取，确保获取完整配置）
+    // 优先使用新的分散式配置读取
     try {
-      const config = await readConfigFile()
-      if (config && config.apps && config.apps[pkg]) {
-        const rawConfig = config.apps[pkg]
-        // 规范化配置结构 - 先展开原始配置，再用默认值覆盖 null/undefined
+      const config = await readAppConfigFile(pkg)
+      if (config) {
+        // 规范化配置结构
         const normalizedConfig = {
-          ...rawConfig,
-          enabled: rawConfig.enabled === true,
-          redirectRules: Array.isArray(rawConfig.redirectRules) ? rawConfig.redirectRules : [],
-          readOnlyRules: Array.isArray(rawConfig.readOnlyRules) ? rawConfig.readOnlyRules : [],
-          monitorPaths: Array.isArray(rawConfig.monitorPaths) ? rawConfig.monitorPaths : []
+          ...config,
+          enabled: config.enabled === true,
+          redirectRules: Array.isArray(config.redirectRules) ? config.redirectRules : [],
+          readOnlyRules: Array.isArray(config.readOnlyRules) ? config.readOnlyRules : []
         }
         appConfigs.value[pkg] = normalizedConfig
         return normalizedConfig
       }
     } catch (e) {
-      console.log('Direct file read failed, trying daemon:', e)
+      console.log('New config read failed, trying daemon:', e)
     }
 
     // 尝试通过 daemon 获取
     const result = await callDaemon('app get', { pkg })
     if (result && result.ok && result.app) {
       const rawConfig = result.app
-      // 规范化配置结构 - 先展开原始配置，再用默认值覆盖 null/undefined
+      // 规范化配置结构
       const normalizedConfig = {
         ...rawConfig,
         enabled: rawConfig.enabled === true,
         redirectRules: Array.isArray(rawConfig.redirectRules) ? rawConfig.redirectRules : [],
-        readOnlyRules: Array.isArray(rawConfig.readOnlyRules) ? rawConfig.readOnlyRules : [],
-        monitorPaths: Array.isArray(rawConfig.monitorPaths) ? rawConfig.monitorPaths : []
+        readOnlyRules: Array.isArray(rawConfig.readOnlyRules) ? rawConfig.readOnlyRules : []
       }
       appConfigs.value[pkg] = normalizedConfig
       return normalizedConfig
@@ -808,8 +939,10 @@ export const useAppStore = defineStore('app', () => {
       return true
     }
 
-    // 确保配置对象是可序列化的
+    // 确保配置对象是可序列化的（只保留应用配置相关字段）
     const configToSave = JSON.parse(JSON.stringify(appConfig))
+    // 删除监控路径字段（现在存储在单独文件中）
+    delete configToSave.monitorPaths
 
     // 首先尝试通过 daemon 保存
     const result = await callDaemon('app set', {
@@ -825,26 +958,15 @@ export const useAppStore = defineStore('app', () => {
       return true
     }
 
-    // daemon 保存失败，使用备用方案：直接写入配置文件
+    // daemon 保存失败，使用备用方案：直接写入单独的应用配置文件
     console.log('Daemon app set failed, trying direct file write. Result:', result)
     try {
-      // 先读取现有配置（确保获取最新数据）
-      const config = await readConfigFile()
-      console.log('saveAppConfig: read existing config, apps count:', Object.keys(config.apps || {}).length)
-      if (!config.apps) {
-        config.apps = {}
-      }
-
-      // 获取内存中的配置（优先使用，因为可能包含最新的 enabled 状态）
+      // 获取内存中的配置
       const memoryConfig = appConfigs.value[pkg] || {}
-      // 获取文件中的配置
-      const fileConfig = config.apps[pkg] || {}
       console.log('saveAppConfig: memory config for', pkg, ':', JSON.stringify(memoryConfig).substring(0, 200))
-      console.log('saveAppConfig: file config for', pkg, ':', JSON.stringify(fileConfig).substring(0, 200))
 
-      // 合并配置：内存配置优先，然后文件配置，最后是要保存的字段
+      // 合并配置：内存配置 + 新配置
       const mergedConfig = {
-        ...fileConfig,
         ...memoryConfig,
         ...configToSave
       }
@@ -852,12 +974,12 @@ export const useAppStore = defineStore('app', () => {
       // 确保所有数组字段都是数组类型（防止 null 值）
       mergedConfig.redirectRules = Array.isArray(mergedConfig.redirectRules) ? mergedConfig.redirectRules : []
       mergedConfig.readOnlyRules = Array.isArray(mergedConfig.readOnlyRules) ? mergedConfig.readOnlyRules : []
-      mergedConfig.monitorPaths = Array.isArray(mergedConfig.monitorPaths) ? mergedConfig.monitorPaths : []
+      // 删除监控路径（存储在单独文件中）
+      delete mergedConfig.monitorPaths
 
-      config.apps[pkg] = mergedConfig
       console.log('saveAppConfig: merged config:', JSON.stringify(mergedConfig).substring(0, 200))
 
-      const success = await writeConfigFile(config)
+      const success = await writeAppConfigFile(pkg, mergedConfig)
       if (success) {
         // 同时更新内存中的配置
         appConfigs.value[pkg] = mergedConfig
@@ -927,23 +1049,25 @@ export const useAppStore = defineStore('app', () => {
       return true
     }
 
-    // daemon 保存失败，使用备用方案：直接写入配置文件
+    // daemon 保存失败，使用备用方案：直接写入全局配置文件
     console.log('【saveGlobalConfig】daemon 保存失败，使用备用方案:', result?.error)
     try {
-      console.log('【saveGlobalConfig】读取现有配置文件...')
-      const config = await readConfigFile()
-      console.log('【saveGlobalConfig】读取到的完整配置:', JSON.stringify(config, null, 2))
+      // 提取监控路径（存储在单独文件中）
+      const monitorPaths = configToSave.monitorPaths
+      const globalWithoutMonitor = { ...configToSave }
+      delete globalWithoutMonitor.monitorPaths
       
-      // 只更新 global 字段，保留 apps 等其他字段
-      console.log('【saveGlobalConfig】更新 global 字段...')
-      config.global = configToSave
-      console.log('【saveGlobalConfig】准备保存的完整配置（含 apps）:', JSON.stringify(config, null, 2))
-      console.log('【saveGlobalConfig】apps 数量:', Object.keys(config.apps || {}).length)
+      console.log('【saveGlobalConfig】保存全局配置（不含监控路径）...')
+      const globalSuccess = await writeGlobalConfigFile(globalWithoutMonitor)
       
-      const success = await writeConfigFile(config)
-      console.log('【saveGlobalConfig】writeConfigFile 返回:', success)
+      // 保存监控路径到单独文件
+      let monitorSuccess = true
+      if (monitorPaths !== undefined) {
+        console.log('【saveGlobalConfig】保存监控路径配置...')
+        monitorSuccess = await writeMonitorConfigFile({ paths: monitorPaths })
+      }
       
-      if (success) {
+      if (globalSuccess && monitorSuccess) {
         globalConfig.value = configToSave
         ksuApi.toast('保存成功')
         console.log('========== saveGlobalConfig 完成（备用方案）==========')

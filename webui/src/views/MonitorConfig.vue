@@ -477,7 +477,7 @@ const deletePath = () => {
 const saveMonitorPaths = async () => {
   console.log('========== saveMonitorPaths 开始 ==========')
   
-  // 将监控路径保存到全局配置
+  // 将监控路径保存
   const pathsConfig = monitorPaths.value.map(p => ({
     id: p.id,
     path: p.path,
@@ -486,37 +486,26 @@ const saveMonitorPaths = async () => {
   }))
   console.log('【步骤1】准备保存的监控路径数据:', JSON.stringify(pathsConfig, null, 2))
 
-  // 先加载最新的全局配置，确保不丢失其他字段
-  console.log('【步骤2】加载当前全局配置...')
-  await appStore.loadGlobalConfig()
-  const currentGlobalConfig = appStore.globalConfig || {}
-  console.log('【步骤3】当前全局配置:', JSON.stringify(currentGlobalConfig, null, 2))
-
-  // 创建新的配置对象，只更新 monitorPaths 字段
-  console.log('【步骤4】合并配置...')
-  const newConfig = {
-    ...JSON.parse(JSON.stringify(currentGlobalConfig)),
-    ...JSON.parse(JSON.stringify(config.value)),
-    monitorPaths: pathsConfig
-  }
-  console.log('【步骤5】合并后的新配置:', JSON.stringify(newConfig, null, 2))
-
-  // 保存到 store
-  console.log('【步骤6】调用 appStore.saveGlobalConfig 保存配置...')
-  const success = await appStore.saveGlobalConfig(newConfig)
+  // 使用新的 monitor API 保存监控路径
+  console.log('【步骤2】调用 monitor set API 保存监控路径...')
+  const result = await appStore.callDaemon('monitor set', { monitor: { paths: pathsConfig } })
+  console.log('【步骤3】monitor set 返回结果:', JSON.stringify(result, null, 2))
   
-  if (success) {
-    // 更新本地 config
-    config.value = newConfig
-    console.log('【步骤7】保存成功！')
+  if (result && result.ok) {
+    console.log('【步骤4】保存成功！')
     
-    // 重新加载配置以确认保存结果
-    console.log('【步骤8】重新加载配置以验证保存结果...')
+    // 同时更新全局配置中的 monitorPaths（保持兼容性）
     await appStore.loadGlobalConfig()
-    console.log('【步骤9】保存后的最新配置:', JSON.stringify(appStore.globalConfig, null, 2))
+    const currentGlobalConfig = appStore.globalConfig || {}
+    const newConfig = {
+      ...JSON.parse(JSON.stringify(currentGlobalConfig)),
+      monitorPaths: pathsConfig
+    }
+    await appStore.saveGlobalConfig(newConfig)
+    
     console.log('========== saveMonitorPaths 完成 ==========')
   } else {
-    console.error('【步骤7】保存失败！')
+    console.error('【步骤4】保存失败！')
     alert('保存失败，请重试')
     console.log('========== saveMonitorPaths 失败 ==========')
   }
@@ -524,10 +513,21 @@ const saveMonitorPaths = async () => {
 
 const loadMonitorPaths = async () => {
   try {
-    // 首先尝试从全局配置中加载
-    await appStore.loadGlobalConfig()
+    // 首先尝试使用新的 monitor API 获取监控路径
+    const result = await appStore.callDaemon('monitor get')
+    if (result && result.ok && result.monitor && result.monitor.paths) {
+      monitorPaths.value = result.monitor.paths.map((p, index) => ({
+        id: p.id || Date.now() + index,
+        path: p.path,
+        desc: p.desc || '',
+        operations: p.operations || ['open', 'write', 'delete']
+      }))
+      console.log('Monitor paths loaded from monitor API:', monitorPaths.value.length)
+      return
+    }
 
-    // 从 store 中读取监控路径
+    // 如果 monitor API 失败，尝试从全局配置中加载（兼容性）
+    await appStore.loadGlobalConfig()
     if (appStore.globalConfig && appStore.globalConfig.monitorPaths) {
       monitorPaths.value = appStore.globalConfig.monitorPaths.map((p, index) => ({
         id: p.id || Date.now() + index,
@@ -535,20 +535,7 @@ const loadMonitorPaths = async () => {
         desc: p.desc || '',
         operations: p.operations || ['open', 'write', 'delete']
       }))
-      console.log('Monitor paths loaded from store:', monitorPaths.value.length)
-      return
-    }
-
-    // 如果 store 中没有，尝试通过 daemon 获取
-    const result = await appStore.callDaemon('global get')
-    if (result && result.ok && result.global && result.global.monitorPaths) {
-      monitorPaths.value = result.global.monitorPaths.map((p, index) => ({
-        id: p.id || Date.now() + index,
-        path: p.path,
-        desc: p.desc || '',
-        operations: p.operations || ['open', 'write', 'delete']
-      }))
-      console.log('Monitor paths loaded from daemon:', monitorPaths.value.length)
+      console.log('Monitor paths loaded from global config:', monitorPaths.value.length)
       return
     }
 
