@@ -3,6 +3,7 @@
 #include <sys/un.h>
 #include <unistd.h>
 #include <cstring>
+#include <string>
 
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "StorageRedirect/IPC", __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, "StorageRedirect/IPC", __VA_ARGS__)

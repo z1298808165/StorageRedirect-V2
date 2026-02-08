@@ -20,11 +20,8 @@ public:
 
     void preAppSpecialize(AppSpecializeArgs *args) override {
         // 获取应用信息
-        auto *appData = args->app_data;
-        if (!appData) return;
-
-        const char *processName = env->GetStringUTFChars(appData->nice_name, nullptr);
-        int uid = appData->uid;
+        jint uid = args->uid;
+        const char *processName = env->GetStringUTFChars(args->nice_name, nullptr);
 
         LOGD("preAppSpecialize: process=%s, uid=%d", processName, uid);
 
@@ -40,10 +37,11 @@ public:
             shouldHook = true;
         }
 
-        env->ReleaseStringUTFChars(appData->nice_name, processName);
+        env->ReleaseStringUTFChars(args->nice_name, processName);
     }
 
     void postAppSpecialize(const AppSpecializeArgs *args) override {
+        (void)args; // 未使用参数
         if (shouldHook) {
             LOGD("Installing hooks for app");
             HookManager::getInstance()->installHooks();
@@ -52,6 +50,7 @@ public:
 
     void preServerSpecialize(ServerSpecializeArgs *args) override {
         // 系统服务不需要 Hook
+        (void)args;
     }
 
 private:
@@ -65,6 +64,8 @@ REGISTER_ZYGISK_MODULE(StorageRedirectModule)
 extern "C" {
 
 JNIEXPORT jint JNI_OnLoad(JavaVM *vm, void *reserved) {
+    (void)vm;
+    (void)reserved;
     LOGD("StorageRedirect JNI_OnLoad called");
     return JNI_VERSION_1_6;
 }

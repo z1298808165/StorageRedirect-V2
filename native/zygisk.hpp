@@ -9,6 +9,8 @@ enum class Option : int {
     KEEP_MODULE_LIBRARY = 1,
 };
 
+struct Api;
+
 struct AppSpecializeArgs {
     jint &uid;
     jint &gid;
@@ -30,6 +32,11 @@ struct ServerSpecializeArgs {
     jlong &effective_capabilities;
 };
 
+struct Api {
+    void (*setOption)(Option opt) = nullptr;
+    void (*setEntrypoint)(void *entry) = nullptr;
+};
+
 class ModuleBase {
 public:
     virtual void onLoad(Api *api, JNIEnv *env) {}
@@ -37,11 +44,6 @@ public:
     virtual void postAppSpecialize(const AppSpecializeArgs *args) {}
     virtual void preServerSpecialize(ServerSpecializeArgs *args) {}
     virtual void postServerSpecialize(const ServerSpecializeArgs *args) {}
-};
-
-struct Api {
-    void (*setOption)(Option opt) = nullptr;
-    void (*setEntrypoint)(void *entry) = nullptr;
 };
 
 #define REGISTER_ZYGISK_MODULE(className) \
