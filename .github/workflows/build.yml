@@ -111,7 +111,7 @@ jobs:
               ..
         make -j$(nproc) VERBOSE=1
         mkdir -p ../../module/zygisk
-        cp libstorage-redirect.so ../../module/zygisk/arm64-v8a.so
+        cp lib/libstorage-redirect.so ../../module/zygisk/arm64-v8a.so
 
     - name: Build Zygisk Module (arm)
       run: |
@@ -126,7 +126,7 @@ jobs:
               ..
         make -j$(nproc) VERBOSE=1
         mkdir -p ../../module/zygisk
-        cp libstorage-redirect.so ../../module/zygisk/armeabi-v7a.so
+        cp lib/libstorage-redirect.so ../../module/zygisk/armeabi-v7a.so
 
     - name: Build Daemon (arm64)
       run: |
