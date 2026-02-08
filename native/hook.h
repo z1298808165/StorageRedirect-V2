@@ -42,6 +42,9 @@ public:
     void init(JNIEnv *env, const std::string &processName, int uid);
     void installHooks();
     
+    // 检查是否已初始化
+    bool isInitialized() const { return m_initialized; }
+    
     // 处理路径，返回决策
     MatchResult processPath(const char *path, Operation op, int flags = 0);
     
@@ -63,18 +66,5 @@ private:
     int m_uid = -1;
     bool m_initialized = false;
 };
-
-// Hook 函数声明（C 链接）
-extern "C" {
-    int hooked_open(const char *pathname, int flags, ...);
-    int hooked_openat(int dirfd, const char *pathname, int flags, ...);
-    int hooked_access(const char *pathname, int mode);
-    int hooked_stat(const char *pathname, struct stat *statbuf);
-    int hooked_lstat(const char *pathname, struct stat *statbuf);
-    int hooked_rename(const char *oldpath, const char *newpath);
-    int hooked_unlink(const char *pathname);
-    int hooked_mkdir(const char *pathname, mode_t mode);
-    int hooked_rmdir(const char *pathname);
-}
 
 } // namespace StorageRedirect

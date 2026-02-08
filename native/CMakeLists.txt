@@ -3,16 +3,8 @@ project("storage-redirect")
 
 set(CMAKE_CXX_STANDARD 20)
 
-# 添加 Dobby Hook 框架
-include(FetchContent)
-FetchContent_Declare(
-    dobby
-    GIT_REPOSITORY https://github.com/jmpews/Dobby.git
-    GIT_TAG master
-)
-FetchContent_MakeAvailable(dobby)
-
 # 添加 jsoncpp（源码方式）
+include(FetchContent)
 FetchContent_Declare(
     jsoncpp
     GIT_REPOSITORY https://github.com/open-source-parsers/jsoncpp.git
@@ -34,14 +26,12 @@ add_library(${CMAKE_PROJECT_NAME} SHARED
 )
 
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
-    ${dobby_SOURCE_DIR}/include
     ${jsoncpp_SOURCE_DIR}/include
 )
 
 target_link_libraries(${CMAKE_PROJECT_NAME}
     log
     dl
-    dobby
     jsoncpp_static
 )
 
