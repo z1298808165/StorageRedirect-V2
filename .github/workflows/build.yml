@@ -1,0 +1,235 @@
+name: Build StorageRedirect Module
+
+on:
+  push:
+    branches: [ main, dev ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  MODULE_NAME: StorageRedirect
+  MODULE_ID: StorageRedirect
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Debug directory structure
+      run: |
+        echo "Current directory: $(pwd)"
+        echo "Directory contents:"
+        ls -la
+        echo ""
+        echo "Looking for webui directory:"
+        find . -type d -name "webui" 2>/dev/null || echo "No webui directory found"
+        echo ""
+        echo "Looking for package.json:"
+        find . -name "package.json" -type f 2>/dev/null || echo "No package.json found"
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Setup Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.21'
+
+    - name: Setup Android NDK
+      uses: nttld/setup-ndk@v1
+      with:
+        ndk-version: r27c
+        add-to-path: true
+
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    - name: Cache CMake dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          native/build/_deps
+          native/build_arm/_deps
+        key: ${{ runner.os }}-cmake-deps-${{ hashFiles('native/CMakeLists.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-cmake-deps-
+
+    - name: Get version
+      id: get_version
+      run: |
+        if [[ $GITHUB_REF == refs/tags/* ]]; then
+          VERSION=${GITHUB_REF#refs/tags/v}
+        else
+          VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "1.0.0-${GITHUB_SHA::7}")
+        fi
+        echo "VERSION=$VERSION" >> $GITHUB_ENV
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+    - name: Build WebUI
+      run: |
+        echo "Current directory: $(pwd)"
+        echo "Listing all files:"
+        ls -la
+        echo ""
+        echo "Checking if webui exists:"
+        ls -la webui/ 2>/dev/null || echo "webui directory not found!"
+        echo ""
+        cd webui
+        # 清除缓存并安装最新依赖
+        rm -rf node_modules package-lock.json
+        npm install
+        # 确保安装最新版本的 kernelsu
+        npm install kernelsu@latest
+        npm run build
+
+    - name: Setup NDK environment
+      run: |
+        echo "NDK_HOME=$ANDROID_NDK_HOME" >> $GITHUB_ENV
+        echo "NDK_ROOT=$ANDROID_NDK_HOME" >> $GITHUB_ENV
+
+    - name: Build Zygisk Module (arm64)
+      run: |
+        cd native
+        rm -rf build
+        mkdir -p build
+        cd build
+        cmake -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake \
+              -DANDROID_ABI=arm64-v8a \
+              -DANDROID_PLATFORM=android-26 \
+              -DCMAKE_BUILD_TYPE=Release \
+              ..
+        make -j$(nproc) VERBOSE=1
+        mkdir -p ../../module/zygisk
+        cp lib/libstorage-redirect.so ../../module/zygisk/arm64-v8a.so
+
+    - name: Build Zygisk Module (arm)
+      run: |
+        cd native
+        rm -rf build_arm
+        mkdir -p build_arm
+        cd build_arm
+        cmake -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake \
+              -DANDROID_ABI=armeabi-v7a \
+              -DANDROID_PLATFORM=android-26 \
+              -DCMAKE_BUILD_TYPE=Release \
+              ..
+        make -j$(nproc) VERBOSE=1
+        mkdir -p ../../module/zygisk
+        cp lib/libstorage-redirect.so ../../module/zygisk/armeabi-v7a.so
+
+    - name: Build Daemon (arm64)
+      run: |
+        cd daemon
+        CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang \
+        CXX=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang++ \
+        GOOS=android GOARCH=arm64 CGO_ENABLED=1 go build -ldflags="-s -w -X main.Version=${{ env.VERSION }}" -o ../module/bin/sr-daemon-arm64 .
+
+    - name: Build Daemon (arm)
+      run: |
+        cd daemon
+        CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi21-clang \
+        CXX=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi21-clang++ \
+        GOOS=android GOARCH=arm CGO_ENABLED=1 go build -ldflags="-s -w -X main.Version=${{ env.VERSION }}" -o ../module/bin/sr-daemon-arm .
+
+    - name: Build daemonctl (arm64)
+      run: |
+        cd daemon/cmd/daemonctl
+        CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang \
+        CXX=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang++ \
+        GOOS=android GOARCH=arm64 CGO_ENABLED=1 go build -ldflags="-s -w" -o ../../../module/bin/daemonctl-arm64 .
+
+    - name: Build daemonctl (arm)
+      run: |
+        cd daemon/cmd/daemonctl
+        CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi21-clang \
+        CXX=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi21-clang++ \
+        GOOS=android GOARCH=arm CGO_ENABLED=1 go build -ldflags="-s -w" -o ../../../module/bin/daemonctl-arm .
+
+    - name: Create wrapper scripts
+      run: |
+        cat > module/bin/sr-daemon << 'EOF'
+        #!/system/bin/sh
+        # StorageRedirect Daemon wrapper
+        ARCH=$(getprop ro.product.cpu.abi)
+        MODDIR="${0%/*}/.."
+        
+        case "$ARCH" in
+            arm64-v8a)
+                exec "$MODDIR/bin/sr-daemon-arm64" "$@"
+                ;;
+            armeabi-v7a|armeabi)
+                exec "$MODDIR/bin/sr-daemon-arm" "$@"
+                ;;
+            *)
+                echo "Unsupported architecture: $ARCH"
+                exit 1
+                ;;
+        esac
+        EOF
+        
+        cat > module/bin/daemonctl << 'EOF'
+        #!/system/bin/sh
+        # StorageRedirect daemonctl wrapper
+        ARCH=$(getprop ro.product.cpu.abi)
+        MODDIR="${0%/*}/.."
+        
+        case "$ARCH" in
+            arm64-v8a)
+                exec "$MODDIR/bin/daemonctl-arm64" "$@"
+                ;;
+            armeabi-v7a|armeabi)
+                exec "$MODDIR/bin/daemonctl-arm" "$@"
+                ;;
+            *)
+                echo "Unsupported architecture: $ARCH"
+                exit 1
+                ;;
+        esac
+        EOF
+        
+        chmod +x module/bin/sr-daemon module/bin/daemonctl
+
+    - name: Update module.prop
+      run: |
+        sed -i "s/version=.*/version=${{ env.VERSION }}/" module/module.prop
+        VERSION_CODE=$(echo "${{ env.VERSION }}" | tr -d '.' | cut -d'-' -f1)
+        # Ensure versionCode is numeric
+        if ! [[ "$VERSION_CODE" =~ ^[0-9]+$ ]]; then
+          VERSION_CODE=$(git rev-list --count HEAD)
+        fi
+        sed -i "s/versionCode=.*/versionCode=$VERSION_CODE/" module/module.prop
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ env.MODULE_NAME }}-${{ env.VERSION }}
+        path: module/
+        include-hidden-files: true
+
+    - name: Create module zip for release
+      if: startsWith(github.ref, 'refs/tags/')
+      run: |
+        mkdir -p release
+        cd module
+        zip -r "../release/${{ env.MODULE_NAME }}-${{ env.VERSION }}.zip" . -x "*.git*" -x "*.DS_Store"
+        cd ..
+
+    - name: Create Release
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: release/*.zip
+        generate_release_notes: true
+        draft: false
+        prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}

@@ -1,0 +1,8 @@
+id=StorageRedirect
+name=存储重定向
+version=1.0.0
+versionCode=1000
+author=XTao
+description=Android 存储访问监控、重定向与只读控制模块。支持按应用配置规则，动态生效无需重启。
+updateJson=
+zygisk=true

@@ -1,0 +1,2052 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#1a1a2e">
+  <title>StorageRedirect - 演示模式</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(180deg, #f8f9fc 0%, #f0f2f8 100%);
+      min-height: 100vh;
+      color: #1a1a2e;
+    }
+    
+    /* Header */
+    .header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(255, 255, 255, 0.8);
+      backdrop-filter: blur(20px);
+      padding: 16px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .header h1 {
+      font-size: 20px;
+      font-weight: 700;
+      color: #1a1a2e;
+    }
+    
+    .daemon-status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: #10b981;
+      background: rgba(16, 185, 129, 0.1);
+      padding: 6px 12px;
+      border-radius: 20px;
+    }
+    
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #10b981;
+    }
+    
+    /* Demo Banner */
+    .demo-banner {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 16px;
+      background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(168, 85, 247, 0.1) 100%);
+      border: 1px solid rgba(139, 92, 246, 0.2);
+      border-radius: 16px;
+      margin: 16px;
+      color: #8b5cf6;
+      font-size: 13px;
+    }
+    
+    /* Filter Bar */
+    .filter-bar {
+      background: #fff;
+      padding: 16px;
+      border-radius: 20px;
+      margin: 0 16px 16px;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+    }
+    
+    .search-box {
+      position: relative;
+      margin-bottom: 12px;
+    }
+    
+    .search-input {
+      width: 100%;
+      padding: 14px 16px 14px 48px;
+      background: #f5f6fa;
+      border: none;
+      border-radius: 16px;
+      color: #1a1a2e;
+      font-size: 15px;
+      outline: none;
+      transition: all 0.3s;
+    }
+    
+    .search-input:focus {
+      background: #eef0f5;
+      box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.2);
+    }
+    
+    .search-input::placeholder {
+      color: #9ca3af;
+    }
+    
+    .filter-tabs {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+    }
+    
+    .tab-btn {
+      padding: 10px 20px;
+      background: #f5f6fa;
+      border: none;
+      border-radius: 24px;
+      color: #6b7280;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.3s;
+      white-space: nowrap;
+    }
+    
+    .tab-btn.active {
+      background: linear-gradient(135deg, #8b5cf6 0%, #a855f7 100%);
+      color: #fff;
+      box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+    }
+    
+    /* App List */
+    .app-section {
+      margin: 0 16px 24px;
+    }
+    
+    .section-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      color: #6b7280;
+      margin-bottom: 12px;
+    }
+    
+    .app-grid {
+      display: grid;
+      gap: 12px;
+    }
+    
+    .app-card {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 16px;
+      background: #fff;
+      border-radius: 20px;
+      cursor: pointer;
+      transition: all 0.3s;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    }
+    
+    .app-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+    }
+    
+    .app-icon {
+      width: 56px;
+      height: 56px;
+      border-radius: 16px;
+      background: linear-gradient(135deg, #8b5cf6 0%, #a855f7 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      font-weight: bold;
+      flex-shrink: 0;
+      color: #fff;
+      box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+    }
+    
+    .app-info {
+      flex: 1;
+      min-width: 0;
+    }
+    
+    .app-name {
+      font-size: 16px;
+      font-weight: 600;
+      color: #1a1a2e;
+      margin-bottom: 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    
+    .app-package {
+      font-size: 12px;
+      color: #9ca3af;
+      margin-bottom: 8px;
+    }
+    
+    .rule-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    
+    .badge {
+      font-size: 10px;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-weight: 500;
+    }
+    
+    .badge.redirect { background: rgba(139, 92, 246, 0.1); color: #8b5cf6; }
+    .badge.readonly { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
+    .badge.monitor { background: rgba(16, 185, 129, 0.1); color: #10b981; }
+    
+    /* Bottom Nav */
+    .bottom-nav {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #fff;
+      border-radius: 32px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 8px;
+      gap: 8px;
+      z-index: 100;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+    }
+    
+    .nav-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      color: #9ca3af;
+      text-decoration: none;
+      font-size: 10px;
+      cursor: pointer;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+    }
+    
+    .nav-item.active {
+      background: linear-gradient(135deg, #8b5cf6 0%, #a855f7 100%);
+      color: #fff;
+      transform: scale(1.1);
+      box-shadow: 0 4px 16px rgba(139, 92, 246, 0.4);
+    }
+    
+    .nav-item svg {
+      width: 22px;
+      height: 22px;
+      transition: all 0.3s;
+    }
+    
+    .nav-item span {
+      margin-top: 2px;
+      opacity: 0;
+      transform: translateY(-4px);
+      transition: all 0.3s;
+      position: absolute;
+      bottom: 4px;
+    }
+    
+    .nav-item.active span {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    
+    /* Detail Page */
+    .detail-header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 16px;
+      background: #fff;
+      border-radius: 20px;
+      margin: 16px;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+    }
+    
+    .back-btn {
+      width: 44px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #f5f6fa;
+      border: none;
+      border-radius: 14px;
+      color: #1a1a2e;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    
+    .back-btn:hover {
+      background: #eef0f5;
+    }
+    
+    .detail-info {
+      flex: 1;
+    }
+    
+    .detail-info h2 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 4px;
+      color: #1a1a2e;
+    }
+    
+    .detail-info p {
+      font-size: 12px;
+      color: #9ca3af;
+    }
+    
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 52px;
+      height: 28px;
+    }
+    
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #e5e7eb;
+      transition: 0.3s;
+      border-radius: 28px;
+    }
+    
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 22px;
+      width: 22px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: 0.3s;
+      border-radius: 50%;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    
+    input:checked + .slider {
+      background: linear-gradient(135deg, #8b5cf6 0%, #a855f7 100%);
+    }
+    
+    input:checked + .slider:before {
+      transform: translateX(24px);
+    }
+    
+    /* Tabs */
+    .tabs {
+      display: flex;
+      gap: 8px;
+      margin: 0 16px 16px;
+      overflow-x: auto;
+      padding-right: 48px;
+    }
+    
+    .tab {
+      padding: 12px 24px;
+      background: #f5f6fa;
+      border: none;
+      border-radius: 24px;
+      color: #6b7280;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.3s;
+    }
+    
+    .tab.active {
+      background: linear-gradient(135deg, #8b5cf6 0%, #a855f7 100%);
+      color: #fff;
+      box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+    }
+    
+    /* Content */
+    .content {
+      padding: 0 16px 100px;
+    }
+    
+    .section {
+      background: #fff;
+      border-radius: 20px;
+      padding: 20px;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+    }
+    
+    .section h3 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      color: #1a1a2e;
+    }
+    
+    .add-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 12px 20px;
+      background: linear-gradient(135deg, #8b5cf6 0%, #a855f7 100%);
+      border: none;
+      border-radius: 12px;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      margin-bottom: 16px;
+      box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+      transition: all 0.3s;
+    }
+    
+    .add-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(139, 92, 246, 0.4);
+    }
+    
+    .rule-card {
+      background: #fff;
+      border-radius: 16px;
+      padding: 16px;
+      margin-bottom: 12px;
+      transition: all 0.3s;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+      border: 1px solid rgba(0, 0, 0, 0.04);
+    }
+    
+    .rule-card:hover {
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+    }
+    
+    .input-group {
+      margin-bottom: 16px;
+    }
+    
+    .input-group label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: #6b7280;
+      margin-bottom: 8px;
+    }
+    
+    .input-group input, .input-group select {
+      width: 100%;
+      padding: 14px 16px;
+      background: #f5f6fa;
+      border: none;
+      border-radius: 14px;
+      color: #1a1a2e;
+      font-size: 15px;
+      outline: none;
+      transition: all 0.3s;
+    }
+    
+    .input-group input:focus, .input-group select:focus {
+      background: #eef0f5;
+      box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.2);
+    }
+    
+    .hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+  <!-- App List Page -->
+  <div id="app-list-page">
+    <header class="header">
+      <h1>StorageRedirect</h1>
+      <div class="daemon-status">
+        <span class="status-dot"></span>
+        <span>演示模式</span>
+      </div>
+    </header>
+    
+    <div class="demo-banner">
+      <span>💡</span>
+      <span>演示模式 - 所有数据为模拟数据，仅用于功能展示</span>
+    </div>
+    
+    <div class="filter-bar">
+      <div class="search-box">
+        <input type="text" class="search-input" placeholder="搜索应用名称或包名..." id="search-input">
+      </div>
+      <div class="filter-tabs">
+        <button class="tab-btn active" data-tab="all">全部</button>
+        <button class="tab-btn" data-tab="user">用户应用</button>
+        <button class="tab-btn" data-tab="system">系统应用</button>
+        <button class="tab-btn" data-tab="configured">已配置</button>
+      </div>
+    </div>
+    
+    <div class="app-section">
+      <h3 class="section-title">已配置规则 <span style="color:#666">(2)</span></h3>
+      <div class="app-grid" id="configured-apps">
+        <!-- Apps with rules will be inserted here -->
+      </div>
+    </div>
+
+    <div class="app-section" id="other-apps-section" style="margin-bottom:100px">
+      <h3 class="section-title">其他应用 <span style="color:#666">(6)</span></h3>
+      <div class="app-grid" id="other-apps">
+        <!-- Other apps will be inserted here -->
+      </div>
+    </div>
+  </div>
+  
+  <!-- App Detail Page -->
+  <div id="app-detail-page" class="hidden">
+    <div class="detail-header">
+      <button class="back-btn" onclick="showAppList()" style="width:40px;height:40px;border-radius:50%;background:#f5f6fa;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all 0.3s">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1a1a2e" stroke-width="2">
+          <path d="M19 12H5M12 19l-7-7 7-7"/>
+        </svg>
+      </button>
+      <div class="detail-info">
+        <h2 id="detail-app-name">应用名称</h2>
+        <p id="detail-app-pkg">com.example.app</p>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="app-enabled" checked>
+        <span class="slider"></span>
+      </label>
+    </div>
+    
+    <div class="tabs" style="position:relative">
+      <button class="tab active" onclick="switchTab('redirect')">重定向</button>
+      <button class="tab" onclick="switchTab('readonly')">只读</button>
+      <button id="tab-add-btn" onclick="handleAddRule()" style="position:absolute;right:0;top:50%;transform:translateY(-50%);width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#8b5cf6,#a855f7);border:none;color:#fff;font-size:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 12px rgba(139,92,246,0.4);transition:all 0.3s">+</button>
+    </div>
+    
+    <div class="content">
+      <!-- Redirect Tab -->
+      <div id="tab-redirect">
+        <div id="redirect-rules">
+          <!-- Will be rendered by JavaScript -->
+        </div>
+        <p id="redirect-hint" style="text-align:center;color:#9ca3af;font-size:13px;margin-top:20px;display:none">
+          拖拽规则可调整优先级顺序，排在前面的规则优先匹配
+        </p>
+      </div>
+      
+      <!-- Readonly Tab -->
+      <div id="tab-readonly" class="hidden">
+        <div id="readonly-rules">
+          <!-- Will be rendered by JavaScript -->
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Monitor Config Page -->
+  <div id="monitor-page" class="hidden">
+    <header class="header">
+      <h1>监控配置</h1>
+      <div class="daemon-status">
+        <span class="status-dot"></span>
+        <span>演示模式</span>
+      </div>
+    </header>
+    
+    <div style="padding:16px">
+      <!-- Global Settings -->
+      <div class="section">
+        <h3>全局设置</h3>
+        <div class="input-group">
+          <label>日志级别</label>
+          <select>
+            <option value="debug">Debug - 记录所有操作</option>
+            <option value="info" selected>Info - 记录重要操作</option>
+            <option value="warn">Warn - 仅记录警告</option>
+            <option value="error">Error - 仅记录错误</option>
+          </select>
+        </div>
+        <div class="input-group">
+          <label>最大日志大小 (MB)</label>
+          <input type="number" value="64">
+        </div>
+      </div>
+      
+      <!-- Monitor Paths -->
+      <div class="section">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+          <h3>监控路径</h3>
+          <button class="add-btn" onclick="addMonitorPath()">+ 添加路径</button>
+        </div>
+        <div id="monitor-paths-list">
+          <!-- Monitor path items will be rendered here -->
+        </div>
+      </div>
+      
+      <!-- Stats -->
+      <div class="section">
+        <h3>日志统计</h3>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;text-align:center">
+          <div>
+            <div style="font-size:20px;font-weight:600;color:#667eea">1 KB</div>
+            <div style="font-size:12px;color:#888">总大小</div>
+          </div>
+          <div>
+            <div style="font-size:20px;font-weight:600;color:#667eea">64 MB</div>
+            <div style="font-size:12px;color:#888">上限</div>
+          </div>
+          <div>
+            <div style="font-size:20px;font-weight:600;color:#667eea" id="monitor-path-count">2</div>
+            <div style="font-size:12px;color:#888">监控路径</div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- View Logs Button -->
+      <div class="section" style="margin-bottom:100px">
+        <button onclick="showPage('monitor-logs')" style="width:100%;padding:16px;background:linear-gradient(135deg,#8b5cf6,#a855f7);border:none;border-radius:16px;color:#fff;font-size:16px;font-weight:500;display:flex;align-items:center;justify-content:center;gap:12px;cursor:pointer;box-shadow:0 4px 16px rgba(139,92,246,0.3);transition:all 0.3s">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="16" y1="13" x2="8" y2="13"/>
+            <line x1="16" y1="17" x2="8" y2="17"/>
+            <polyline points="10 9 9 9 8 9"/>
+          </svg>
+          查看访问日志
+        </button>
+        <p style="text-align:center;color:#9ca3af;font-size:13px;margin-top:12px;margin-bottom:0">
+          按路径维度查看所有应用的文件访问记录
+        </p>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Monitor Logs Page -->
+  <div id="monitor-logs-page" class="hidden">
+    <header class="header">
+      <button onclick="showPage('monitor')" class="back-btn" style="width:40px;height:40px;border-radius:50%;background:#f5f6fa;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all 0.3s">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1a1a2e" stroke-width="2">
+          <path d="M19 12H5M12 19l-7-7 7-7"/>
+        </svg>
+      </button>
+      <h1>访问日志</h1>
+      <div class="daemon-status">
+        <span class="status-dot"></span>
+        <span>演示模式</span>
+      </div>
+    </header>
+    
+    <div style="padding:16px">
+      <!-- Filter Bar -->
+      <div class="filter-bar" style="margin-bottom:16px">
+        <div class="search-box">
+          <input type="text" class="search-input" id="log-search-input" placeholder="搜索路径、应用包名或文件名..." style="padding-left:16px">
+        </div>
+        <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+          <select id="log-path-filter" style="flex:1;min-width:120px;padding:12px;background:#f5f6fa;border:none;border-radius:12px;color:#1a1a2e;font-size:14px">
+            <option value="">所有路径</option>
+          </select>
+          <select id="log-app-filter" style="flex:1;min-width:120px;padding:12px;background:#f5f6fa;border:none;border-radius:12px;color:#1a1a2e;font-size:14px">
+            <option value="">所有应用</option>
+          </select>
+          <select id="log-action-filter" style="flex:1;min-width:100px;padding:12px;background:#f5f6fa;border:none;border-radius:12px;color:#1a1a2e;font-size:14px">
+            <option value="">所有操作</option>
+            <option value="open">打开</option>
+            <option value="write">写入</option>
+            <option value="delete">删除</option>
+            <option value="mkdir">创建目录</option>
+          </select>
+        </div>
+      </div>
+      
+      <!-- Logs List -->
+      <div id="monitor-logs-list" style="padding-bottom:100px">
+        <!-- Logs will be rendered here -->
+      </div>
+    </div>
+  </div>
+  
+  <!-- Redirect Rule Modal -->
+  <div id="redirect-modal" class="hidden" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:200;overflow-y:auto">
+    <div style="max-width:600px;margin:0 auto;min-height:100vh;background:linear-gradient(180deg,#f8f9fc 0%,#f0f2f8 100%)">
+      <header class="header">
+        <button onclick="closeRedirectModal()" class="back-btn" style="width:40px;height:40px;border-radius:50%;background:#f5f6fa;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all 0.3s">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1a1a2e" stroke-width="2">
+            <path d="M19 12H5M12 19l-7-7 7-7"/>
+          </svg>
+        </button>
+        <h1 id="redirect-modal-title">添加重定向规则</h1>
+        <button onclick="saveRedirectRule()" style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#8b5cf6,#a855f7);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 12px rgba(139,92,246,0.3)">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+        </button>
+      </header>
+      
+      <div style="padding:16px">
+        <div class="section">
+          <div class="input-group">
+            <label>源路径</label>
+            <input type="text" id="redirect-source" placeholder="例如: /storage/emulated/0/Download">
+          </div>
+          <div style="text-align:center;color:#8b5cf6;margin:16px 0">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transform:rotate(90deg)">
+              <path d="M5 12h14M12 5l7 7-7 7"/>
+            </svg>
+          </div>
+          <div class="input-group">
+            <label>目标路径</label>
+            <input type="text" id="redirect-target" placeholder="例如: /storage/emulated/0/Download/MyApp">
+          </div>
+        </div>
+        
+        <div class="section">
+          <h3>规则说明</h3>
+          <p style="color:#6b7280;font-size:13px;line-height:1.6">
+            当应用访问源路径时，会自动重定向到目标路径。<br>
+            例如：源路径为 <code>/sdcard/Download</code>，目标路径为 <code>/sdcard/Download/App</code>，
+            则应用访问 <code>/sdcard/Download/file.txt</code> 时，实际访问的是 <code>/sdcard/Download/App/file.txt</code>。
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Readonly Rule Modal -->
+  <div id="readonly-modal" class="hidden" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:200;overflow-y:auto">
+    <div style="max-width:600px;margin:0 auto;min-height:100vh;background:linear-gradient(180deg,#f8f9fc 0%,#f0f2f8 100%)">
+      <header class="header">
+        <button onclick="closeReadonlyModal()" class="back-btn" style="width:40px;height:40px;border-radius:50%;background:#f5f6fa;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all 0.3s">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1a1a2e" stroke-width="2">
+            <path d="M19 12H5M12 19l-7-7 7-7"/>
+          </svg>
+        </button>
+        <h1 id="readonly-modal-title">添加只读规则</h1>
+        <button onclick="saveReadonlyRule()" style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#f59e0b,#d97706);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 12px rgba(245,158,11,0.3)">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+        </button>
+      </header>
+      
+      <div style="padding:16px">
+        <div class="section">
+          <div class="input-group">
+            <label>只读路径</label>
+            <input type="text" id="readonly-path" placeholder="例如: /storage/emulated/0/DCIM">
+          </div>
+        </div>
+        
+        <div class="section">
+          <h3>规则说明</h3>
+          <p style="color:#6b7280;font-size:13px;line-height:1.6">
+            设置只读路径后，应用将无法对该路径下的文件进行写入、删除或修改操作。<br>
+            这可以有效防止应用误删或篡改重要文件。
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Custom Confirm Dialog -->
+  <div id="confirm-dialog" class="hidden" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:300;display:flex;align-items:center;justify-content:center">
+    <div style="background:#fff;border-radius:24px;padding:28px;max-width:360px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.2)">
+      <div style="text-align:center;margin-bottom:20px">
+        <div style="width:60px;height:60px;background:rgba(245,158,11,0.1);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 16px">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/>
+            <line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+        </div>
+        <h3 id="confirm-title" style="margin:0 0 8px;font-size:18px;color:#1a1a2e">确认删除</h3>
+        <p id="confirm-message" style="margin:0;color:#6b7280;font-size:14px">确定要删除这条规则吗？</p>
+      </div>
+      <div style="display:flex;gap:12px">
+        <button onclick="closeConfirmDialog()" style="flex:1;padding:14px;background:#f5f6fa;border:none;border-radius:12px;color:#6b7280;font-size:14px;cursor:pointer;font-weight:500">取消</button>
+        <button id="confirm-ok-btn" style="flex:1;padding:14px;background:linear-gradient(135deg,#ef4444,#dc2626);border:none;border-radius:12px;color:#fff;font-size:14px;cursor:pointer;font-weight:500">删除</button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Monitor Path Detail Modal -->
+  <div id="monitor-path-modal" class="hidden" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:200;overflow-y:auto">
+    <div style="max-width:600px;margin:0 auto;min-height:100vh;background:linear-gradient(180deg,#f8f9fc 0%,#f0f2f8 100%)">
+      <header class="header">
+        <button onclick="closeMonitorPathModal()" class="back-btn" style="width:40px;height:40px;border-radius:50%;background:#f5f6fa;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all 0.3s">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1a1a2e" stroke-width="2">
+            <path d="M19 12H5M12 19l-7-7 7-7"/>
+          </svg>
+        </button>
+        <h1>路径详情</h1>
+        <button onclick="saveMonitorPath()" style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#8b5cf6,#a855f7);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 12px rgba(139,92,246,0.3)">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+        </button>
+      </header>
+      
+      <div style="padding:16px">
+        <div class="section">
+          <div class="input-group">
+            <label>监控路径</label>
+            <input type="text" id="monitor-path-input" placeholder="例如: /storage/emulated/0/Pictures">
+          </div>
+          <div class="input-group">
+            <label>描述（可选）</label>
+            <input type="text" id="monitor-path-desc" placeholder="例如: 相册目录">
+          </div>
+        </div>
+        
+        <div class="section">
+          <h3>监控操作</h3>
+          <div style="display:flex;flex-direction:column;gap:12px">
+            <label style="display:flex;align-items:center;gap:12px;cursor:pointer;color:#1a1a2e">
+              <input type="checkbox" id="monitor-open" checked style="width:20px;height:20px;accent-color:#8b5cf6">
+              <span>open - 文件打开/创建</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:12px;cursor:pointer;color:#1a1a2e">
+              <input type="checkbox" id="monitor-write" checked style="width:20px;height:20px;accent-color:#8b5cf6">
+              <span>write - 文件写入</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:12px;cursor:pointer;color:#1a1a2e">
+              <input type="checkbox" id="monitor-delete" checked style="width:20px;height:20px;accent-color:#8b5cf6">
+              <span>delete - 文件删除</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:12px;cursor:pointer;color:#1a1a2e">
+              <input type="checkbox" id="monitor-mkdir" style="width:20px;height:20px;accent-color:#8b5cf6">
+              <span>mkdir - 创建目录</span>
+            </label>
+          </div>
+        </div>
+        
+
+      </div>
+    </div>
+  </div>
+  
+  <!-- About Page -->
+  <div id="about-page" class="hidden">
+    <header class="header">
+      <h1>关于</h1>
+      <div class="daemon-status">
+        <span class="status-dot"></span>
+        <span>演示模式</span>
+      </div>
+    </header>
+    
+    <div style="padding:40px 20px 140px;text-align:center">
+      <div style="width:80px;height:80px;margin:0 auto 20px;background:linear-gradient(135deg,#8b5cf6,#a855f7);border-radius:24px;display:flex;align-items:center;justify-content:center;font-size:32px">
+        📁
+      </div>
+      <h2 style="margin-bottom:8px;color:#1a1a2e">StorageRedirect</h2>
+      <p style="color:#6b7280;margin-bottom:40px">版本 1.0.0 (演示)</p>
+      
+      <div style="text-align:left;max-width:400px;margin:0 auto">
+        <h3 style="margin-bottom:16px;color:#1a1a2e">功能介绍</h3>
+        <ul style="list-style:none;color:#6b7280;line-height:2;font-size:14px">
+          <li>📁 重定向 - 将应用访问路径重定向到目标路径</li>
+          <li>🔒 只读控制 - 禁止应用写入指定路径</li>
+          <li>📊 访问监控 - 记录应用的文件访问操作</li>
+          <li>⚡ 动态生效 - 规则修改无需重启</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Bottom Nav -->
+  <nav class="bottom-nav">
+    <div class="nav-item active" onclick="showPage('app-list')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="3" y="3" width="7" height="7" rx="1"/>
+        <rect x="14" y="3" width="7" height="7" rx="1"/>
+        <rect x="14" y="14" width="7" height="7" rx="1"/>
+        <rect x="3" y="14" width="7" height="7" rx="1"/>
+      </svg>
+      <span>应用</span>
+    </div>
+    <div class="nav-item" onclick="showPage('monitor')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 20v-6M6 20V10M18 20V4"/>
+      </svg>
+      <span>监控</span>
+    </div>
+    <div class="nav-item" onclick="showPage('about')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10"/>
+        <path d="M12 16v-4M12 8h.01"/>
+      </svg>
+      <span>关于</span>
+    </div>
+  </nav>
+
+  <script>
+    // Demo Data
+    const apps = [
+      { pkg: 'com.example.demo', name: '演示应用', version: '1.0.0', isSystem: false, 
+        rules: { redirect: 1, readonly: 1, monitor: 1 }, enabled: true },
+      { pkg: 'com.tencent.mm', name: '微信', version: '8.0.0', isSystem: false,
+        rules: { redirect: 1, readonly: 0, monitor: 1 }, enabled: true },
+      { pkg: 'com.android.settings', name: '设置', version: '12.0', isSystem: true,
+        rules: { redirect: 0, readonly: 0, monitor: 0 }, enabled: false },
+      { pkg: 'com.google.android.apps.photos', name: 'Google 相册', version: '6.0', isSystem: false,
+        rules: { redirect: 0, readonly: 0, monitor: 0 }, enabled: false },
+      { pkg: 'com.taobao.taobao', name: '淘宝', version: '10.0', isSystem: false,
+        rules: { redirect: 0, readonly: 0, monitor: 0 }, enabled: false },
+      { pkg: 'com.sina.weibo', name: '微博', version: '12.0', isSystem: false,
+        rules: { redirect: 0, readonly: 0, monitor: 0 }, enabled: false },
+      { pkg: 'com.baidu.netdisk', name: '百度网盘', version: '11.0', isSystem: false,
+        rules: { redirect: 0, readonly: 0, monitor: 0 }, enabled: false },
+      { pkg: 'com.android.chrome', name: 'Chrome', version: '100.0', isSystem: true,
+        rules: { redirect: 0, readonly: 0, monitor: 0 }, enabled: false }
+    ];
+    
+    // Monitor paths data - applies to all apps by default
+    let monitorPaths = [
+      { 
+        id: 1,
+        path: '/storage/emulated/0/Pictures',
+        desc: '相册目录',
+        operations: ['open', 'write', 'delete']
+      },
+      { 
+        id: 2,
+        path: '/storage/emulated/0/Download',
+        desc: '下载目录',
+        operations: ['open', 'write']
+      }
+    ];
+    
+    let currentApp = null;
+    let currentTab = 'redirect';
+    let editingMonitorPath = null;
+    let editingRedirectRule = null;
+    let editingReadonlyRule = null;
+    let dragSrcEl = null;
+    
+    // App-specific rules data
+    const appRules = {
+      'com.example.demo': {
+        redirect: [
+          { id: 1, source: '/storage/emulated/0/Download', target: '/storage/emulated/0/Download/Demo' },
+          { id: 2, source: '/sdcard/Download', target: '/sdcard/Download/Demo' }
+        ],
+        readonly: [
+          { id: 1, path: '/storage/emulated/0/DCIM' }
+        ]
+      },
+      'com.tencent.mm': {
+        redirect: [
+          { id: 1, source: '/storage/emulated/0/Pictures/WeChat', target: '/storage/emulated/0/Pictures/WeChat_Hidden' }
+        ],
+        readonly: []
+      }
+    };
+    
+    // Demo access logs - path based
+    const accessLogs = [
+      { id: 1, timestamp: '2024-01-15 10:23:45', app: 'com.tencent.mm', appName: '微信', path: '/storage/emulated/0/Pictures/WeChat', file: 'IMG_20240115_102345.jpg', action: 'write', type: 'monitor' },
+      { id: 2, timestamp: '2024-01-15 10:23:46', app: 'com.tencent.mm', appName: '微信', path: '/storage/emulated/0/Pictures/WeChat', file: 'IMG_20240115_102346.jpg', action: 'write', type: 'monitor' },
+      { id: 3, timestamp: '2024-01-15 10:24:12', app: 'com.example.demo', appName: '演示应用', path: '/storage/emulated/0/Download', file: 'test.txt', action: 'open', type: 'redirect', redirectTo: '/storage/emulated/0/Download/Demo/test.txt' },
+      { id: 4, timestamp: '2024-01-15 10:24:15', app: 'com.example.demo', appName: '演示应用', path: '/storage/emulated/0/DCIM', file: 'photo.jpg', action: 'write', type: 'deny', message: '只读规则阻止写入' },
+      { id: 5, timestamp: '2024-01-15 10:25:01', app: 'com.taobao.taobao', appName: '淘宝', path: '/storage/emulated/0/Pictures', file: 'screenshot_123.jpg', action: 'write', type: 'monitor' },
+      { id: 6, timestamp: '2024-01-15 10:26:33', app: 'com.sina.weibo', appName: '微博', path: '/storage/emulated/0/Download', file: 'video.mp4', action: 'delete', type: 'monitor' },
+      { id: 7, timestamp: '2024-01-15 10:27:18', app: 'com.baidu.netdisk', appName: '百度网盘', path: '/storage/emulated/0/Download', file: 'document.pdf', action: 'open', type: 'monitor' },
+      { id: 8, timestamp: '2024-01-15 10:28:05', app: 'com.example.demo', appName: '演示应用', path: '/storage/emulated/0/Download', file: 'NewFolder', action: 'mkdir', type: 'redirect', redirectTo: '/storage/emulated/0/Download/Demo/NewFolder' }
+    ];
+    
+    // Initialize
+    function init() {
+      renderAppList();
+      setupEventListeners();
+    }
+    
+    function renderAppList() {
+      const configuredContainer = document.getElementById('configured-apps');
+      const otherContainer = document.getElementById('other-apps');
+      const otherSection = document.getElementById('other-apps-section');
+      const configuredSectionTitle = document.querySelector('.app-section .section-title');
+
+      configuredContainer.innerHTML = '';
+      otherContainer.innerHTML = '';
+
+      const searchTerm = document.getElementById('search-input').value.toLowerCase();
+      const activeTab = document.querySelector('.tab-btn.active').dataset.tab;
+
+      // Show/hide other apps section based on active tab
+      if (activeTab === 'configured') {
+        otherSection.style.display = 'none';
+      } else {
+        otherSection.style.display = 'block';
+      }
+
+      apps.forEach(app => {
+        if (searchTerm && !app.name.toLowerCase().includes(searchTerm) &&
+            !app.pkg.toLowerCase().includes(searchTerm)) return;
+
+        if (activeTab === 'user' && app.isSystem) return;
+        if (activeTab === 'system' && !app.isSystem) return;
+        if (activeTab === 'configured' && (app.rules.redirect + app.rules.readonly === 0)) return;
+
+        const hasRules = app.rules.redirect + app.rules.readonly > 0;
+
+        const card = document.createElement('div');
+        card.className = 'app-card';
+        card.onclick = () => showAppDetail(app);
+
+        const iconInitial = app.name.charAt(0);
+        const badges = [];
+        if (app.rules.redirect) badges.push(`<span class="badge redirect">重定向 ${app.rules.redirect}</span>`);
+        if (app.rules.readonly) badges.push(`<span class="badge readonly">只读 ${app.rules.readonly}</span>`);
+
+        // System app badge
+        const systemBadge = app.isSystem ? `<span style="display:inline-block;margin-left:6px;padding:2px 6px;background:#f5f6fa;border-radius:4px;font-size:10px;color:#9ca3af;font-weight:500">系统</span>` : '';
+
+        card.innerHTML = `
+          <div class="app-icon">${iconInitial}</div>
+          <div class="app-info">
+            <div class="app-name">${app.name}${systemBadge}</div>
+            <div class="app-package">${app.pkg}</div>
+            <div class="rule-badges">${badges.join('')}</div>
+          </div>
+          <div class="app-status ${app.enabled ? 'active' : ''}">
+            <span class="status-indicator"></span>
+          </div>
+        `;
+
+        if (hasRules) {
+          configuredContainer.appendChild(card);
+        } else {
+          otherContainer.appendChild(card);
+        }
+      });
+    }
+    
+    function setupEventListeners() {
+      // Search
+      document.getElementById('search-input').addEventListener('input', renderAppList);
+      
+      // Filter tabs
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          renderAppList();
+        });
+      });
+    }
+    
+    function showAppDetail(app) {
+      currentApp = app;
+      document.getElementById('detail-app-name').textContent = app.name;
+      document.getElementById('detail-app-pkg').textContent = app.pkg;
+      document.getElementById('app-enabled').checked = app.enabled;
+      
+      // Reset tabs to redirect
+      currentTab = 'redirect';
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelector('.tab[onclick="switchTab(\'redirect\')"]').classList.add('active');
+      document.getElementById('tab-redirect').classList.remove('hidden');
+      document.getElementById('tab-readonly').classList.add('hidden');
+      
+      // Render rules for current app
+      renderRedirectRules();
+      renderReadonlyRules();
+      
+      document.getElementById('app-list-page').classList.add('hidden');
+      document.getElementById('app-detail-page').classList.remove('hidden');
+      document.querySelector('.bottom-nav').style.display = 'none';
+    }
+    
+    function showAppList() {
+      document.getElementById('app-detail-page').classList.add('hidden');
+      document.getElementById('app-list-page').classList.remove('hidden');
+      document.querySelector('.bottom-nav').style.display = 'flex';
+      renderAppList();
+    }
+    
+    function showPage(page) {
+      // Hide all pages
+      document.getElementById('app-list-page').classList.add('hidden');
+      document.getElementById('app-detail-page').classList.add('hidden');
+      document.getElementById('monitor-page').classList.add('hidden');
+      document.getElementById('monitor-logs-page').classList.add('hidden');
+      document.getElementById('about-page').classList.add('hidden');
+      
+      // Show selected page
+      if (page === 'app-list') {
+        document.getElementById('app-list-page').classList.remove('hidden');
+        document.querySelector('.bottom-nav').style.display = 'flex';
+      } else if (page === 'monitor') {
+        document.getElementById('monitor-page').classList.remove('hidden');
+        document.querySelector('.bottom-nav').style.display = 'flex';
+      } else if (page === 'monitor-logs') {
+        document.getElementById('monitor-logs-page').classList.remove('hidden');
+        document.querySelector('.bottom-nav').style.display = 'none';
+        initMonitorLogsPage();
+      } else if (page === 'about') {
+        document.getElementById('about-page').classList.remove('hidden');
+        document.querySelector('.bottom-nav').style.display = 'flex';
+      }
+      
+      // Update nav active state
+      document.querySelectorAll('.nav-item').forEach((item, index) => {
+        item.classList.remove('active');
+        if ((page === 'app-list' && index === 0) ||
+            (page === 'monitor' && index === 1) ||
+            (page === 'about' && index === 2)) {
+          item.classList.add('active');
+        }
+      });
+    }
+    
+    function handleAddRule() {
+      if (currentTab === 'redirect') {
+        openRedirectModal();
+      } else if (currentTab === 'readonly') {
+        openReadonlyModal();
+      }
+    }
+    
+    function switchTab(tab) {
+      currentTab = tab;
+      
+      // Update tab buttons
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      event.target.classList.add('active');
+      
+      // Show/hide content
+      document.getElementById('tab-redirect').classList.add('hidden');
+      document.getElementById('tab-readonly').classList.add('hidden');
+      
+      document.getElementById('tab-' + tab).classList.remove('hidden');
+      
+      // Render redirect rules when switching to redirect tab
+      if (tab === 'redirect' && currentApp) {
+        renderRedirectRules();
+      }
+      
+      // Render readonly rules when switching to readonly tab
+      if (tab === 'readonly' && currentApp) {
+        renderReadonlyRules();
+      }
+    }
+    
+    // Redirect Rule Functions
+    function openRedirectModal(ruleId = null) {
+      editingRedirectRule = ruleId;
+      const modal = document.getElementById('redirect-modal');
+      const title = document.getElementById('redirect-modal-title');
+      const sourceInput = document.getElementById('redirect-source');
+      const targetInput = document.getElementById('redirect-target');
+      
+      if (ruleId) {
+        // Edit mode
+        const rules = appRules[currentApp.pkg]?.redirect || [];
+        const rule = rules.find(r => r.id === ruleId);
+        if (rule) {
+          title.textContent = '编辑重定向规则';
+          sourceInput.value = rule.source;
+          targetInput.value = rule.target;
+        }
+      } else {
+        // Add mode
+        title.textContent = '添加重定向规则';
+        sourceInput.value = '';
+        targetInput.value = '';
+      }
+      
+      modal.classList.remove('hidden');
+    }
+    
+    function closeRedirectModal() {
+      document.getElementById('redirect-modal').classList.add('hidden');
+      editingRedirectRule = null;
+    }
+    
+    function isValidPath(path) {
+      // Path must start with /
+      if (!path || !path.startsWith('/')) {
+        return false;
+      }
+      // Path should not contain invalid characters
+      const invalidChars = /[<>:"|?*\x00-\x1f]/;
+      if (invalidChars.test(path)) {
+        return false;
+      }
+      // Path should not end with / (except root)
+      if (path.length > 1 && path.endsWith('/')) {
+        return false;
+      }
+      return true;
+    }
+    
+    function showAlertDialog(message) {
+      // Reuse confirm dialog for alerts
+      showConfirmDialog('提示', message, '确定', closeConfirmDialog);
+    }
+    
+    function saveRedirectRule() {
+      const source = document.getElementById('redirect-source').value.trim();
+      const target = document.getElementById('redirect-target').value.trim();
+      
+      if (!source || !target) {
+        showAlertDialog('请填写源路径和目标路径');
+        return;
+      }
+      
+      if (!isValidPath(source)) {
+        showAlertDialog('源路径格式不正确，路径必须以 / 开头，不能包含特殊字符');
+        return;
+      }
+      
+      if (!isValidPath(target)) {
+        showAlertDialog('目标路径格式不正确，路径必须以 / 开头，不能包含特殊字符');
+        return;
+      }
+      
+      if (!appRules[currentApp.pkg]) {
+        appRules[currentApp.pkg] = { redirect: [], readonly: [] };
+      }
+      
+      const rules = appRules[currentApp.pkg].redirect;
+      
+      if (editingRedirectRule) {
+        // Update existing
+        const rule = rules.find(r => r.id === editingRedirectRule);
+        if (rule) {
+          rule.source = source;
+          rule.target = target;
+        }
+      } else {
+        // Add new (to the end, lowest priority)
+        rules.push({
+          id: Date.now(),
+          source: source,
+          target: target
+        });
+      }
+      
+      // Update app rule count
+      currentApp.rules.redirect = rules.length;
+      
+      closeRedirectModal();
+      renderRedirectRules();
+      renderAppList();
+    }
+    
+    let confirmCallback = null;
+    
+    function showConfirmDialog(title, message, okText, okCallback) {
+      document.getElementById('confirm-title').textContent = title;
+      document.getElementById('confirm-message').textContent = message;
+      document.getElementById('confirm-ok-btn').textContent = okText;
+      confirmCallback = okCallback;
+      document.getElementById('confirm-dialog').classList.remove('hidden');
+    }
+    
+    function closeConfirmDialog() {
+      document.getElementById('confirm-dialog').classList.add('hidden');
+      confirmCallback = null;
+    }
+    
+    document.getElementById('confirm-ok-btn').addEventListener('click', function() {
+      if (confirmCallback) {
+        confirmCallback();
+        closeConfirmDialog();
+      }
+    });
+    
+    function deleteRedirectRule(ruleId) {
+      showConfirmDialog(
+        '确认删除',
+        '确定要删除这条重定向规则吗？此操作不可恢复。',
+        '删除',
+        function() {
+          const rules = appRules[currentApp.pkg]?.redirect || [];
+          const index = rules.findIndex(r => r.id === ruleId);
+          if (index > -1) {
+            rules.splice(index, 1);
+            currentApp.rules.redirect = rules.length;
+            renderRedirectRules();
+            renderAppList();
+          }
+        }
+      );
+    }
+    
+    function renderRedirectRules() {
+      const container = document.getElementById('redirect-rules');
+      const hint = document.getElementById('redirect-hint');
+      if (!container || !currentApp) return;
+      
+      const rules = appRules[currentApp.pkg]?.redirect || [];
+      
+      if (rules.length === 0) {
+        container.innerHTML = `
+          <div style="text-align:center;padding:40px 20px;color:#888">
+            <div style="font-size:48px;margin-bottom:16px">📁</div>
+            <p>暂无重定向规则</p>
+            <p style="font-size:13px;margin-top:8px">点击上方按钮添加规则</p>
+          </div>
+        `;
+        hint.style.display = 'none';
+        return;
+      }
+      
+      hint.style.display = 'block';
+      container.innerHTML = '';
+      
+      rules.forEach((rule, index) => {
+        const card = document.createElement('div');
+        card.className = 'rule-card';
+        card.dataset.id = rule.id;
+        card.dataset.index = index;
+        
+        card.innerHTML = `
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+            <span style="color:#8b5cf6;font-weight:600;font-size:14px">#${index + 1}</span>
+            <span style="flex:1"></span>
+            <button onclick="openRedirectModal(${rule.id})" style="background:rgba(139,92,246,0.1);border:none;color:#8b5cf6;padding:6px 12px;border-radius:6px;font-size:12px;cursor:pointer;font-weight:500">编辑</button>
+            <button onclick="deleteRedirectRule(${rule.id})" style="background:rgba(239,68,68,0.1);border:none;color:#ef4444;padding:6px 12px;border-radius:6px;font-size:12px;cursor:pointer;font-weight:500">删除</button>
+            <span class="drag-handle" data-id="${rule.id}" style="color:#9ca3af;cursor:move;padding:4px;user-select:none">⋮⋮</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px">
+            <div style="flex:1;background:#f5f6fa;padding:12px;border-radius:12px">
+              <div style="font-size:11px;color:#6b7280;margin-bottom:4px">源路径</div>
+              <div style="font-size:13px;color:#1a1a2e;word-break:break-all;font-weight:500">${rule.source}</div>
+            </div>
+            <div style="color:#8b5cf6">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M5 12h14M12 5l7 7-7 7"/>
+              </svg>
+            </div>
+            <div style="flex:1;background:rgba(139,92,246,0.08);padding:12px;border-radius:12px;border:1px solid rgba(139,92,246,0.15)">
+              <div style="font-size:11px;color:#8b5cf6;margin-bottom:4px">目标路径</div>
+              <div style="font-size:13px;color:#1a1a2e;word-break:break-all;font-weight:500">${rule.target}</div>
+            </div>
+          </div>
+        `;
+        
+        container.appendChild(card);
+      });
+      
+      // Initialize drag and drop for all cards
+      initDragAndDrop();
+    }
+    
+    // Touch and Mouse Drag and Drop
+    let draggedItem = null;
+    let draggedIndex = null;
+    let touchOffsetY = 0;
+    let placeholder = null;
+    
+    function initDragAndDrop() {
+      const container = document.getElementById('redirect-rules');
+      if (!container) return;
+      
+      const handles = container.querySelectorAll('.drag-handle');
+      handles.forEach(handle => {
+        // Touch events for mobile
+        handle.addEventListener('touchstart', handleTouchStart, { passive: false });
+        handle.addEventListener('touchmove', handleTouchMove, { passive: false });
+        handle.addEventListener('touchend', handleTouchEnd);
+        
+        // Mouse events for desktop
+        handle.addEventListener('mousedown', handleMouseDown);
+      });
+    }
+    
+    function handleTouchStart(e) {
+      e.preventDefault();
+      const handle = e.currentTarget;
+      const card = handle.closest('.rule-card');
+      if (!card) return;
+      
+      draggedItem = card;
+      draggedIndex = parseInt(card.dataset.index);
+      
+      const touch = e.touches[0];
+      const rect = card.getBoundingClientRect();
+      touchOffsetY = touch.clientY - rect.top;
+      
+      // Create placeholder
+      placeholder = document.createElement('div');
+      placeholder.style.height = rect.height + 'px';
+      placeholder.style.marginBottom = '12px';
+      placeholder.style.border = '2px dashed #8b5cf6';
+      placeholder.style.borderRadius = '16px';
+      placeholder.style.background = 'rgba(139,92,246,0.05)';
+      
+      // Style the dragged item
+      card.style.position = 'fixed';
+      card.style.width = rect.width + 'px';
+      card.style.zIndex = '1000';
+      card.style.opacity = '0.9';
+      card.style.boxShadow = '0 8px 32px rgba(0,0,0,0.2)';
+      card.style.left = rect.left + 'px';
+      card.style.top = (touch.clientY - touchOffsetY) + 'px';
+      
+      card.parentNode.insertBefore(placeholder, card.nextSibling);
+    }
+    
+    function handleTouchMove(e) {
+      if (!draggedItem) return;
+      e.preventDefault();
+      
+      const touch = e.touches[0];
+      draggedItem.style.top = (touch.clientY - touchOffsetY) + 'px';
+      
+      // Find the element below
+      const elementBelow = document.elementFromPoint(touch.clientX, touch.clientY);
+      if (!elementBelow) return;
+      
+      const cardBelow = elementBelow.closest('.rule-card');
+      if (cardBelow && cardBelow !== draggedItem && cardBelow !== placeholder) {
+        const container = document.getElementById('redirect-rules');
+        const allCards = Array.from(container.querySelectorAll('.rule-card'));
+        const belowIndex = allCards.indexOf(cardBelow);
+        
+        if (belowIndex > -1) {
+          // Move placeholder
+          const rect = cardBelow.getBoundingClientRect();
+          const middleY = rect.top + rect.height / 2;
+          
+          if (touch.clientY < middleY) {
+            container.insertBefore(placeholder, cardBelow);
+          } else {
+            container.insertBefore(placeholder, cardBelow.nextSibling);
+          }
+        }
+      }
+    }
+    
+    function handleTouchEnd(e) {
+      if (!draggedItem) return;
+      
+      // Get final position
+      const container = document.getElementById('redirect-rules');
+      const allItems = Array.from(container.children);
+      const newIndex = allItems.indexOf(placeholder);
+      
+      // Reset styles
+      draggedItem.style.position = '';
+      draggedItem.style.width = '';
+      draggedItem.style.zIndex = '';
+      draggedItem.style.opacity = '';
+      draggedItem.style.boxShadow = '';
+      draggedItem.style.left = '';
+      draggedItem.style.top = '';
+      
+      // Move the actual item
+      if (placeholder && placeholder.parentNode) {
+        placeholder.parentNode.insertBefore(draggedItem, placeholder);
+        placeholder.remove();
+      }
+      
+      // Update data
+      if (draggedIndex !== null && newIndex !== -1 && draggedIndex !== newIndex) {
+        const rules = appRules[currentApp.pkg]?.redirect || [];
+        const [movedRule] = rules.splice(draggedIndex, 1);
+        
+        // Adjust index if needed
+        let insertIndex = newIndex;
+        if (newIndex > draggedIndex) {
+          insertIndex = newIndex - 1;
+        }
+        rules.splice(insertIndex, 0, movedRule);
+        
+        renderRedirectRules();
+      }
+      
+      draggedItem = null;
+      draggedIndex = null;
+      placeholder = null;
+    }
+    
+    function handleMouseDown(e) {
+      e.preventDefault();
+      const handle = e.currentTarget;
+      const card = handle.closest('.rule-card');
+      if (!card) return;
+      
+      draggedItem = card;
+      draggedIndex = parseInt(card.dataset.index);
+      
+      const rect = card.getBoundingClientRect();
+      touchOffsetY = e.clientY - rect.top;
+      
+      // Create placeholder
+      placeholder = document.createElement('div');
+      placeholder.style.height = rect.height + 'px';
+      placeholder.style.marginBottom = '12px';
+      placeholder.style.border = '2px dashed #8b5cf6';
+      placeholder.style.borderRadius = '16px';
+      placeholder.style.background = 'rgba(139,92,246,0.05)';
+      
+      // Style the dragged item
+      card.style.position = 'fixed';
+      card.style.width = rect.width + 'px';
+      card.style.zIndex = '1000';
+      card.style.opacity = '0.9';
+      card.style.boxShadow = '0 8px 32px rgba(0,0,0,0.2)';
+      card.style.left = rect.left + 'px';
+      card.style.top = rect.top + 'px';
+      
+      card.parentNode.insertBefore(placeholder, card.nextSibling);
+      
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    }
+    
+    function handleMouseMove(e) {
+      if (!draggedItem) return;
+      
+      draggedItem.style.top = (e.clientY - touchOffsetY) + 'px';
+      
+      // Find the element below
+      const elementBelow = document.elementFromPoint(e.clientX, e.clientY);
+      if (!elementBelow) return;
+      
+      const cardBelow = elementBelow.closest('.rule-card');
+      if (cardBelow && cardBelow !== draggedItem && cardBelow !== placeholder) {
+        const container = document.getElementById('redirect-rules');
+        const allCards = Array.from(container.querySelectorAll('.rule-card'));
+        const belowIndex = allCards.indexOf(cardBelow);
+        
+        if (belowIndex > -1) {
+          const rect = cardBelow.getBoundingClientRect();
+          const middleY = rect.top + rect.height / 2;
+          
+          if (e.clientY < middleY) {
+            container.insertBefore(placeholder, cardBelow);
+          } else {
+            container.insertBefore(placeholder, cardBelow.nextSibling);
+          }
+        }
+      }
+    }
+    
+    function handleMouseUp(e) {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      
+      if (!draggedItem) return;
+      
+      // Get final position
+      const container = document.getElementById('redirect-rules');
+      const allItems = Array.from(container.children);
+      const newIndex = allItems.indexOf(placeholder);
+      
+      // Reset styles
+      draggedItem.style.position = '';
+      draggedItem.style.width = '';
+      draggedItem.style.zIndex = '';
+      draggedItem.style.opacity = '';
+      draggedItem.style.boxShadow = '';
+      draggedItem.style.left = '';
+      draggedItem.style.top = '';
+      
+      // Move the actual item
+      if (placeholder && placeholder.parentNode) {
+        placeholder.parentNode.insertBefore(draggedItem, placeholder);
+        placeholder.remove();
+      }
+      
+      // Update data
+      if (draggedIndex !== null && newIndex !== -1 && draggedIndex !== newIndex) {
+        const rules = appRules[currentApp.pkg]?.redirect || [];
+        const [movedRule] = rules.splice(draggedIndex, 1);
+        
+        let insertIndex = newIndex;
+        if (newIndex > draggedIndex) {
+          insertIndex = newIndex - 1;
+        }
+        rules.splice(insertIndex, 0, movedRule);
+        
+        renderRedirectRules();
+      }
+      
+      draggedItem = null;
+      draggedIndex = null;
+      placeholder = null;
+    }
+    
+    // Readonly Rule Functions
+    function openReadonlyModal(ruleId = null) {
+      editingReadonlyRule = ruleId;
+      const modal = document.getElementById('readonly-modal');
+      const title = document.getElementById('readonly-modal-title');
+      const pathInput = document.getElementById('readonly-path');
+      
+      if (ruleId) {
+        const rules = appRules[currentApp.pkg]?.readonly || [];
+        const rule = rules.find(r => r.id === ruleId);
+        if (rule) {
+          title.textContent = '编辑只读规则';
+          pathInput.value = rule.path;
+        }
+      } else {
+        title.textContent = '添加只读规则';
+        pathInput.value = '';
+      }
+      
+      modal.classList.remove('hidden');
+    }
+    
+    function closeReadonlyModal() {
+      document.getElementById('readonly-modal').classList.add('hidden');
+      editingReadonlyRule = null;
+    }
+    
+    function saveReadonlyRule() {
+      const path = document.getElementById('readonly-path').value.trim();
+      
+      if (!path) {
+        showAlertDialog('请填写只读路径');
+        return;
+      }
+      
+      if (!isValidPath(path)) {
+        showAlertDialog('路径格式不正确，路径必须以 / 开头，不能包含特殊字符');
+        return;
+      }
+      
+      if (!appRules[currentApp.pkg]) {
+        appRules[currentApp.pkg] = { redirect: [], readonly: [] };
+      }
+      
+      const rules = appRules[currentApp.pkg].readonly;
+      
+      if (editingReadonlyRule) {
+        const rule = rules.find(r => r.id === editingReadonlyRule);
+        if (rule) {
+          rule.path = path;
+        }
+      } else {
+        rules.push({
+          id: Date.now(),
+          path: path
+        });
+      }
+      
+      currentApp.rules.readonly = rules.length;
+      
+      closeReadonlyModal();
+      renderReadonlyRules();
+      renderAppList();
+    }
+    
+    function deleteReadonlyRule(ruleId) {
+      showConfirmDialog(
+        '确认删除',
+        '确定要删除这条只读规则吗？此操作不可恢复。',
+        '删除',
+        function() {
+          const rules = appRules[currentApp.pkg]?.readonly || [];
+          const index = rules.findIndex(r => r.id === ruleId);
+          if (index > -1) {
+            rules.splice(index, 1);
+            currentApp.rules.readonly = rules.length;
+            renderReadonlyRules();
+            renderAppList();
+          }
+        }
+      );
+    }
+    
+    function renderReadonlyRules() {
+      const container = document.getElementById('readonly-rules');
+      if (!container || !currentApp) return;
+      
+      const rules = appRules[currentApp.pkg]?.readonly || [];
+      
+      if (rules.length === 0) {
+        container.innerHTML = `
+          <div style="text-align:center;padding:40px 20px;color:#9ca3af">
+            <div style="font-size:48px;margin-bottom:16px">🔒</div>
+            <p>暂无只读规则</p>
+            <p style="font-size:13px;margin-top:8px">点击上方按钮添加规则</p>
+          </div>
+        `;
+        return;
+      }
+      
+      container.innerHTML = '';
+      
+      rules.forEach((rule, index) => {
+        const card = document.createElement('div');
+        card.className = 'rule-card';
+        
+        card.innerHTML = `
+          <div style="display:flex;align-items:center;gap:12px">
+            <span style="color:#f59e0b;font-weight:600;font-size:14px">#${index + 1}</span>
+            <div style="flex:1">
+              <div style="font-size:11px;color:#6b7280;margin-bottom:4px">只读路径</div>
+              <div style="font-size:14px;color:#1a1a2e;word-break:break-all;font-weight:500">${rule.path}</div>
+            </div>
+            <button onclick="openReadonlyModal(${rule.id})" style="background:rgba(245,158,11,0.1);border:none;color:#f59e0b;padding:6px 12px;border-radius:6px;font-size:12px;cursor:pointer;font-weight:500">编辑</button>
+            <button onclick="deleteReadonlyRule(${rule.id})" style="background:rgba(239,68,68,0.1);border:none;color:#ef4444;padding:6px 12px;border-radius:6px;font-size:12px;cursor:pointer;font-weight:500">删除</button>
+          </div>
+        `;
+        
+        container.appendChild(card);
+      });
+    }
+    
+    function renderAppMonitorRules() {
+      const container = document.getElementById('monitor-rules');
+      if (!container || !currentApp) return;
+      
+      container.innerHTML = '';
+      
+      // All monitor paths apply to all apps by default
+      if (monitorPaths.length === 0) {
+        container.innerHTML = `
+          <div style="text-align:center;padding:40px 20px;color:#9ca3af">
+            <div style="font-size:48px;margin-bottom:16px">📊</div>
+            <p>暂无监控路径配置</p>
+            <p style="font-size:13px;margin-top:8px">前往「监控配置」页面添加路径</p>
+          </div>
+        `;
+        return;
+      }
+      
+      const opLabels = {
+        'open': '打开',
+        'write': '写入',
+        'delete': '删除',
+        'mkdir': '创建目录'
+      };
+      
+      monitorPaths.forEach(mp => {
+        const card = document.createElement('div');
+        card.className = 'rule-card';
+        const opText = mp.operations.map(op => opLabels[op] || op).join(', ');
+        
+        card.innerHTML = `
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+            <div style="font-weight:500;color:#1a1a2e;word-break:break-all">${mp.path}</div>
+          </div>
+          ${mp.desc ? `<div style="font-size:12px;color:#6b7280;margin-bottom:8px">${mp.desc}</div>` : ''}
+          <div style="font-size:12px;color:#9ca3af">
+            监控操作: ${opText}
+          </div>
+        `;
+        
+        container.appendChild(card);
+      });
+    }
+    
+    function addRule(type) {
+      showAlertDialog('演示模式：添加' + (type === 'redirect' ? '重定向' : type === 'readonly' ? '只读' : '监控') + '规则');
+    }
+    
+    // Monitor Path Functions
+    function renderMonitorPaths() {
+      const container = document.getElementById('monitor-paths-list');
+      if (!container) return;
+      
+      container.innerHTML = '';
+      
+      monitorPaths.forEach(mp => {
+        const card = document.createElement('div');
+        card.className = 'rule-card';
+        card.style.cursor = 'pointer';
+        card.onclick = () => editMonitorPath(mp.id);
+        
+        const opLabels = {
+          'open': '打开',
+          'write': '写入',
+          'delete': '删除',
+          'mkdir': '创建目录'
+        };
+        const opText = mp.operations.map(op => opLabels[op] || op).join(', ');
+        
+        card.innerHTML = `
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+            <div style="font-weight:500;color:#1a1a2e;word-break:break-all">${mp.path}</div>
+          </div>
+          ${mp.desc ? `<div style="font-size:12px;color:#6b7280;margin-bottom:8px">${mp.desc}</div>` : ''}
+          <div style="font-size:12px;color:#9ca3af">
+            监控: ${opText}
+          </div>
+        `;
+        
+        container.appendChild(card);
+      });
+      
+      // Update count
+      const countEl = document.getElementById('monitor-path-count');
+      if (countEl) countEl.textContent = monitorPaths.length;
+    }
+    
+    function addMonitorPath() {
+      editingMonitorPath = null;
+      document.getElementById('monitor-path-input').value = '';
+      document.getElementById('monitor-path-desc').value = '';
+      document.getElementById('monitor-open').checked = true;
+      document.getElementById('monitor-write').checked = true;
+      document.getElementById('monitor-delete').checked = true;
+      document.getElementById('monitor-mkdir').checked = false;
+      document.getElementById('monitor-path-modal').classList.remove('hidden');
+    }
+    
+    function editMonitorPath(id) {
+      const mp = monitorPaths.find(p => p.id === id);
+      if (!mp) return;
+      
+      editingMonitorPath = mp;
+      document.getElementById('monitor-path-input').value = mp.path;
+      document.getElementById('monitor-path-desc').value = mp.desc || '';
+      document.getElementById('monitor-open').checked = mp.operations.includes('open');
+      document.getElementById('monitor-write').checked = mp.operations.includes('write');
+      document.getElementById('monitor-delete').checked = mp.operations.includes('delete');
+      document.getElementById('monitor-mkdir').checked = mp.operations.includes('mkdir');
+      document.getElementById('monitor-path-modal').classList.remove('hidden');
+    }
+    
+    function closeMonitorPathModal() {
+      document.getElementById('monitor-path-modal').classList.add('hidden');
+      editingMonitorPath = null;
+    }
+    
+    function saveMonitorPath() {
+      const path = document.getElementById('monitor-path-input').value.trim();
+      if (!path) {
+        showAlertDialog('请输入监控路径');
+        return;
+      }
+
+      if (!isValidPath(path)) {
+        showAlertDialog('路径格式不正确，路径必须以 / 开头，不能包含特殊字符');
+        return;
+      }
+
+      const operations = [];
+      if (document.getElementById('monitor-open').checked) operations.push('open');
+      if (document.getElementById('monitor-write').checked) operations.push('write');
+      if (document.getElementById('monitor-delete').checked) operations.push('delete');
+      if (document.getElementById('monitor-mkdir').checked) operations.push('mkdir');
+
+      if (operations.length === 0) {
+        showAlertDialog('请至少选择一个监控操作');
+        return;
+      }
+      
+      if (editingMonitorPath) {
+        // Update existing
+        editingMonitorPath.path = path;
+        editingMonitorPath.desc = document.getElementById('monitor-path-desc').value.trim();
+        editingMonitorPath.operations = operations;
+      } else {
+        // Add new
+        monitorPaths.push({
+          id: Date.now(),
+          path: path,
+          desc: document.getElementById('monitor-path-desc').value.trim(),
+          operations: operations
+        });
+      }
+      
+      // Update app monitor counts (all apps have the same count = number of paths)
+      updateAppMonitorCounts();
+      
+      renderMonitorPaths();
+      closeMonitorPathModal();
+      renderAppList(); // Refresh app list to show updated monitor counts
+    }
+    
+    function updateAppMonitorCounts() {
+      // All apps have the same monitor count (equal to number of paths)
+      const count = monitorPaths.length;
+      apps.forEach(app => {
+        app.rules.monitor = count;
+      });
+    }
+    
+    // Monitor Logs Page Functions
+    function initMonitorLogsPage() {
+      // Populate path filter
+      const pathFilter = document.getElementById('log-path-filter');
+      pathFilter.innerHTML = '<option value="">所有路径</option>';
+      monitorPaths.forEach(mp => {
+        const option = document.createElement('option');
+        option.value = mp.path;
+        option.textContent = mp.desc ? `${mp.desc} (${mp.path})` : mp.path;
+        pathFilter.appendChild(option);
+      });
+      
+      // Populate app filter
+      const appFilter = document.getElementById('log-app-filter');
+      appFilter.innerHTML = '<option value="">所有应用</option>';
+      apps.forEach(app => {
+        const option = document.createElement('option');
+        option.value = app.pkg;
+        option.textContent = app.name;
+        appFilter.appendChild(option);
+      });
+      
+      // Setup event listeners
+      document.getElementById('log-search-input').addEventListener('input', renderMonitorLogs);
+      document.getElementById('log-path-filter').addEventListener('change', renderMonitorLogs);
+      document.getElementById('log-app-filter').addEventListener('change', renderMonitorLogs);
+      document.getElementById('log-action-filter').addEventListener('change', renderMonitorLogs);
+      
+      // Initial render
+      renderMonitorLogs();
+    }
+    
+    function renderMonitorLogs() {
+      const container = document.getElementById('monitor-logs-list');
+      const searchTerm = document.getElementById('log-search-input').value.toLowerCase();
+      const pathFilter = document.getElementById('log-path-filter').value;
+      const appFilter = document.getElementById('log-app-filter').value;
+      const actionFilter = document.getElementById('log-action-filter').value;
+      
+      // Filter logs
+      let filteredLogs = accessLogs.filter(log => {
+        if (searchTerm) {
+          const searchStr = (log.path + log.file + log.app + log.appName).toLowerCase();
+          if (!searchStr.includes(searchTerm)) return false;
+        }
+        if (pathFilter && !log.path.startsWith(pathFilter)) return false;
+        if (appFilter && log.app !== appFilter) return false;
+        if (actionFilter && log.action !== actionFilter) return false;
+        return true;
+      });
+      
+      // Sort by timestamp desc
+      filteredLogs.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+      
+      if (filteredLogs.length === 0) {
+        container.innerHTML = `
+          <div style="text-align:center;padding:60px 20px;color:#888">
+            <div style="font-size:48px;margin-bottom:16px">📋</div>
+            <p>暂无日志记录</p>
+            <p style="font-size:13px;margin-top:8px">调整筛选条件或稍后再试</p>
+          </div>
+        `;
+        return;
+      }
+      
+      container.innerHTML = '';
+      
+      const actionLabels = {
+        'open': '打开',
+        'write': '写入',
+        'delete': '删除',
+        'mkdir': '创建目录'
+      };
+      
+      const actionColors = {
+        'open': '#667eea',
+        'write': '#f59e0b',
+        'delete': '#ef4444',
+        'mkdir': '#10b981'
+      };
+      
+      filteredLogs.forEach(log => {
+        const card = document.createElement('div');
+        card.className = 'rule-card';
+        card.style.marginBottom = '12px';
+        
+        let content = '';
+        let borderColor = actionColors[log.action] || '#667eea';
+        
+        if (log.type === 'redirect') {
+          content = `
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+              <span style="color:${borderColor};font-weight:500">[REDIRECT]</span>
+              <span style="color:#888;font-size:12px">${log.timestamp}</span>
+            </div>
+            <div style="margin-bottom:4px">
+              <span style="color:#aaa">${log.actionLabels || actionLabels[log.action]}</span>
+              <span style="color:#fff;margin-left:8px">${log.path}/${log.file}</span>
+            </div>
+            <div style="color:#10b981;font-size:13px;margin-top:4px">
+              → ${log.redirectTo}
+            </div>
+            <div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.1)">
+              <span style="color:#888;font-size:12px">应用: ${log.appName}</span>
+            </div>
+          `;
+        } else if (log.type === 'deny') {
+          content = `
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+              <span style="color:#ef4444;font-weight:500">[DENY]</span>
+              <span style="color:#888;font-size:12px">${log.timestamp}</span>
+            </div>
+            <div style="margin-bottom:4px">
+              <span style="color:#aaa">${actionLabels[log.action]}</span>
+              <span style="color:#fff;margin-left:8px">${log.path}/${log.file}</span>
+            </div>
+            <div style="color:#ef4444;font-size:13px;margin-top:4px">
+              ${log.message}
+            </div>
+            <div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.1)">
+              <span style="color:#888;font-size:12px">应用: ${log.appName}</span>
+            </div>
+          `;
+        } else {
+          content = `
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+              <span style="color:${borderColor};font-weight:500">[${actionLabels[log.action].toUpperCase()}]</span>
+              <span style="color:#888;font-size:12px">${log.timestamp}</span>
+            </div>
+            <div style="margin-bottom:4px">
+              <span style="color:#fff">${log.path}/${log.file}</span>
+            </div>
+            <div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.1);display:flex;justify-content:space-between;align-items:center">
+              <span style="color:#888;font-size:12px">应用: ${log.appName}</span>
+              <span style="color:#666;font-size:12px">${log.app}</span>
+            </div>
+          `;
+        }
+        
+        card.innerHTML = content;
+        card.style.borderLeft = `3px solid ${borderColor}`;
+        container.appendChild(card);
+      });
+    }
+    
+    // Initialize on load
+    init();
+    renderMonitorPaths();
+  </script>
+</body>
+</html>
