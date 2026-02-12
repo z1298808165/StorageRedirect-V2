@@ -80,6 +80,12 @@ public:
     // 获取应用配置
     AppConfig getAppConfig(const std::string &pkg);
     
+    // 获取监控路径
+    std::vector<MonitorPath> getMonitorPaths() {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        return m_monitorPaths;
+    }
+    
     // 检查是否应该 Hook 此应用
     bool shouldHookApp(const std::string &processName, int uid);
     

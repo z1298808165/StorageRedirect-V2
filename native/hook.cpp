@@ -208,11 +208,18 @@ MatchResult HookManager::processPath(const char *path, Operation op, int flags) 
 
 void HookManager::logOperation(Operation op, const char *path, const MatchResult &result, int errno_val) {
     auto config = Config::getInstance()->getAppConfig(m_processName);
-    if (!config.monitorEnabled) return;
+    
+    // 获取全局监控路径配置
+    auto monitorPaths = Config::getInstance()->getMonitorPaths();
+    
+    // 如果没有启用监控且没有监控路径，则不记录
+    if (!config.monitorEnabled && monitorPaths.empty()) return;
     
     // 检查是否需要监控此路径和操作
     bool shouldLog = false;
-    for (const auto &mp : config.monitorPaths) {
+    
+    // 首先检查全局监控路径
+    for (const auto &mp : monitorPaths) {
         if (Config::pathMatches(path, mp.path)) {
             // 检查操作类型
             std::string opStr;
@@ -236,6 +243,11 @@ void HookManager::logOperation(Operation op, const char *path, const MatchResult
             }
         }
         if (shouldLog) break;
+    }
+    
+    // 如果有重定向或拒绝，也应该记录
+    if (result.decision == Decision::REDIRECT || result.decision == Decision::DENY_RO) {
+        shouldLog = true;
     }
     
     if (!shouldLog) return;
@@ -279,6 +291,13 @@ __attribute__((weak)) int open(const char *pathname, int flags, ...) {
     
     auto result = HookManager::getInstance()->processPath(pathname, Operation::OPEN, flags);
     
+    // 处理只读拒绝 - 在调用原始函数之前就拒绝
+    if (result.decision == Decision::DENY_RO) {
+        HookManager::getInstance()->logOperation(Operation::OPEN, pathname, result, EACCES);
+        errno = EACCES;
+        return -1;
+    }
+    
     const char *actualPath = result.decision == Decision::REDIRECT ? 
                              result.mappedPath.c_str() : pathname;
     
@@ -291,12 +310,6 @@ __attribute__((weak)) int open(const char *pathname, int flags, ...) {
     
     int saved_errno = errno;
     HookManager::getInstance()->logOperation(Operation::OPEN, pathname, result, ret < 0 ? saved_errno : 0);
-    
-    // 处理只读拒绝
-    if (result.decision == Decision::DENY_RO) {
-        errno = EACCES;
-        return -1;
-    }
     
     errno = saved_errno;
     return ret;
@@ -320,6 +333,13 @@ __attribute__((weak)) int openat(int dirfd, const char *pathname, int flags, ...
     
     auto result = HookManager::getInstance()->processPath(pathname, Operation::OPEN, flags);
     
+    // 处理只读拒绝 - 在调用原始函数之前就拒绝
+    if (result.decision == Decision::DENY_RO) {
+        HookManager::getInstance()->logOperation(Operation::OPEN, pathname, result, EACCES);
+        errno = EACCES;
+        return -1;
+    }
+    
     const char *actualPath = result.decision == Decision::REDIRECT ? 
                              result.mappedPath.c_str() : pathname;
     
@@ -332,11 +352,6 @@ __attribute__((weak)) int openat(int dirfd, const char *pathname, int flags, ...
     
     int saved_errno = errno;
     HookManager::getInstance()->logOperation(Operation::OPEN, pathname, result, ret < 0 ? saved_errno : 0);
-    
-    if (result.decision == Decision::DENY_RO) {
-        errno = EACCES;
-        return -1;
-    }
     
     errno = saved_errno;
     return ret;
@@ -403,14 +418,16 @@ __attribute__((weak)) int rename(const char *oldpath, const char *newpath) {
     
     auto result = HookManager::getInstance()->processPath(oldpath, Operation::RENAME);
     
-    int ret = orig_rename ? orig_rename(oldpath, newpath) : ::rename(oldpath, newpath);
-    int saved_errno = errno;
-    HookManager::getInstance()->logOperation(Operation::RENAME, oldpath, result, ret < 0 ? saved_errno : 0);
-    
+    // 处理只读拒绝 - 在调用原始函数之前就拒绝
     if (result.decision == Decision::DENY_RO) {
+        HookManager::getInstance()->logOperation(Operation::RENAME, oldpath, result, EACCES);
         errno = EACCES;
         return -1;
     }
+    
+    int ret = orig_rename ? orig_rename(oldpath, newpath) : ::rename(oldpath, newpath);
+    int saved_errno = errno;
+    HookManager::getInstance()->logOperation(Operation::RENAME, oldpath, result, ret < 0 ? saved_errno : 0);
     
     errno = saved_errno;
     return ret;
@@ -423,14 +440,16 @@ __attribute__((weak)) int unlink(const char *pathname) {
     
     auto result = HookManager::getInstance()->processPath(pathname, Operation::UNLINK);
     
-    int ret = orig_unlink ? orig_unlink(pathname) : ::unlink(pathname);
-    int saved_errno = errno;
-    HookManager::getInstance()->logOperation(Operation::UNLINK, pathname, result, ret < 0 ? saved_errno : 0);
-    
+    // 处理只读拒绝 - 在调用原始函数之前就拒绝
     if (result.decision == Decision::DENY_RO) {
+        HookManager::getInstance()->logOperation(Operation::UNLINK, pathname, result, EACCES);
         errno = EACCES;
         return -1;
     }
+    
+    int ret = orig_unlink ? orig_unlink(pathname) : ::unlink(pathname);
+    int saved_errno = errno;
+    HookManager::getInstance()->logOperation(Operation::UNLINK, pathname, result, ret < 0 ? saved_errno : 0);
     
     errno = saved_errno;
     return ret;
@@ -443,14 +462,20 @@ __attribute__((weak)) int mkdir(const char *pathname, mode_t mode) {
     
     auto result = HookManager::getInstance()->processPath(pathname, Operation::MKDIR);
     
-    int ret = orig_mkdir ? orig_mkdir(pathname, mode) : ::mkdir(pathname, mode);
-    int saved_errno = errno;
-    HookManager::getInstance()->logOperation(Operation::MKDIR, pathname, result, ret < 0 ? saved_errno : 0);
-    
+    // 处理只读拒绝 - 在调用原始函数之前就拒绝
     if (result.decision == Decision::DENY_RO) {
+        HookManager::getInstance()->logOperation(Operation::MKDIR, pathname, result, EACCES);
         errno = EACCES;
         return -1;
     }
+    
+    // 如果是重定向，创建目标目录
+    const char *actualPath = result.decision == Decision::REDIRECT ? 
+                             result.mappedPath.c_str() : pathname;
+    
+    int ret = orig_mkdir ? orig_mkdir(actualPath, mode) : ::mkdir(actualPath, mode);
+    int saved_errno = errno;
+    HookManager::getInstance()->logOperation(Operation::MKDIR, pathname, result, ret < 0 ? saved_errno : 0);
     
     errno = saved_errno;
     return ret;
@@ -463,14 +488,16 @@ __attribute__((weak)) int rmdir(const char *pathname) {
     
     auto result = HookManager::getInstance()->processPath(pathname, Operation::RMDIR);
     
-    int ret = orig_rmdir ? orig_rmdir(pathname) : ::rmdir(pathname);
-    int saved_errno = errno;
-    HookManager::getInstance()->logOperation(Operation::RMDIR, pathname, result, ret < 0 ? saved_errno : 0);
-    
+    // 处理只读拒绝 - 在调用原始函数之前就拒绝
     if (result.decision == Decision::DENY_RO) {
+        HookManager::getInstance()->logOperation(Operation::RMDIR, pathname, result, EACCES);
         errno = EACCES;
         return -1;
     }
+    
+    int ret = orig_rmdir ? orig_rmdir(pathname) : ::rmdir(pathname);
+    int saved_errno = errno;
+    HookManager::getInstance()->logOperation(Operation::RMDIR, pathname, result, ret < 0 ? saved_errno : 0);
     
     errno = saved_errno;
     return ret;

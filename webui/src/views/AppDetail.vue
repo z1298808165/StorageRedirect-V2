@@ -924,6 +924,8 @@ onUnmounted(() => {
   border-radius: 20px;
   margin-bottom: 16px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+  min-width: 0;
+  overflow: hidden;
 }
 
 .back-btn {
@@ -954,6 +956,8 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 12px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .app-icon {
@@ -962,16 +966,28 @@ onUnmounted(() => {
   border-radius: 16px;
 }
 
+.app-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
 .app-text h2 {
   font-size: 18px;
   font-weight: 600;
   margin-bottom: 4px;
   color: #1a1a2e;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .app-text p {
   font-size: 12px;
   color: #9ca3af;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .switch {
@@ -979,6 +995,7 @@ onUnmounted(() => {
   display: inline-block;
   width: 52px;
   height: 28px;
+  flex-shrink: 0;
 }
 
 .switch input {

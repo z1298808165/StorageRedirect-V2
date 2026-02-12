@@ -304,8 +304,8 @@ const isEnabled = (app) => {
 
 // 获取应用状态样式类
 // 无点: 没有配置规则
-// 灰色点: 已配置规则但应用未运行（enabled=false）
-// 绿色点: 已配置规则且应用处于运行状态（enabled=true）
+// 灰色点: 已配置规则但应用未运行（enabled=false 或 应用未运行）
+// 绿色点: 已配置规则且应用处于运行状态（enabled=true 且应用正在运行）
 // 红色点: 已配置规则且应用处于运行状态但规则挂载失败
 const getAppStatusClass = (app) => {
   const configs = appStore.appConfigs
@@ -321,17 +321,25 @@ const getAppStatusClass = (app) => {
     return ''
   }
 
-  // 有规则但应用未启用（enabled=false），显示灰色
+  // 有规则但未启用，显示灰色
   if (!config || config.enabled !== true) {
     return 'stopped'
   }
 
-  // 有规则且启用，检查是否有挂载错误
+  // 检查应用是否在运行
+  const isRunning = appStore.isAppRunning(app.packageName)
+  
+  // 有规则且启用，但应用未运行，显示灰色
+  if (!isRunning) {
+    return 'stopped'
+  }
+
+  // 有规则且启用且应用运行中，检查是否有挂载错误
   if (config.mountError || config.error) {
     return 'error'
   }
 
-  // 有规则且启用且无错误，显示绿色（运行中）
+  // 有规则且启用且应用运行中且无错误，显示绿色
   return 'running'
 }
 
@@ -399,6 +407,9 @@ onMounted(async () => {
       console.log('[AppList] Real apps loaded successfully')
       await appStore.loadAppConfigs()
       console.log('[AppList] App configs loaded, count:', Object.keys(appStore.appConfigs?.value || {}).length)
+      // 获取运行中的应用
+      await appStore.getRunningApps()
+      console.log('[AppList] Running apps loaded, count:', appStore.runningApps.size)
     } else if (appStore.apps.length === 0) {
       console.log('[AppList] Failed to load real apps, loading demo data')
       appStore.loadDemoData()

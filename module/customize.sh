@@ -27,6 +27,7 @@ ui_print "- Android API: $API"
 # 创建必要目录
 ui_print "- 创建模块目录..."
 mkdir -p "$MODPATH/config"
+mkdir -p "$MODPATH/config/apps"
 mkdir -p "$MODPATH/logs"
 mkdir -p "$MODPATH/bin"
 mkdir -p "$MODPATH/run"
@@ -38,42 +39,56 @@ set_perm_recursive "$MODPATH/bin" 0 0 0755 0755
 set_perm_recursive "$MODPATH/zygisk" 0 0 0755 0755
 set_perm_recursive "$MODPATH/webroot" 0 0 0755 0644
 
-# 创建默认配置文件
-if [ ! -f "$MODPATH/config/config.json" ]; then
-    ui_print "- 创建默认配置..."
-    cat > "$MODPATH/config/config.json" << 'EOF'
+# 创建默认配置文件（仅在不存在时创建，保留用户配置）
+if [ ! -f "$MODPATH/config/global.json" ]; then
+    ui_print "- 创建默认全局配置..."
+    cat > "$MODPATH/config/global.json" << 'EOF'
 {
-  "version": 1,
-  "global": {
-    "monitorEnabled": true,
-    "logLevel": "info",
-    "maxLogSizeMB": 64,
-    "update": {
-      "pollIntervalMs": 3000,
-      "opCheckInterval": 50
-    },
-    "processAttribution": {
-      "mode": "strict",
-      "inheritToAllSameUid": true,
-      "inheritToIsolated": true,
-      "inheritToChildProcess": true,
-      "fallbackUnknownPolicy": "denyWriteOnMatchedPaths",
-      "diagnosticTagUnknown": true
-    },
-    "uri": {
-      "redirectEnabled": true,
-      "mappingMode": "bestEffort",
-      "onMappingFailed": "enforceReadonlyAndMonitor",
-      "logMappingDetails": true
-    }
+  "monitorEnabled": true,
+  "logLevel": "info",
+  "maxLogSizeMB": 64,
+  "update": {
+    "pollIntervalMs": 3000,
+    "opCheckInterval": 50
   },
-  "apps": {}
+  "processAttribution": {
+    "mode": "strict",
+    "inheritToAllSameUid": true,
+    "inheritToIsolated": true,
+    "inheritToChildProcess": true,
+    "fallbackUnknownPolicy": "denyWriteOnMatchedPaths",
+    "diagnosticTagUnknown": true
+  },
+  "uri": {
+    "redirectEnabled": true,
+    "mappingMode": "bestEffort",
+    "onMappingFailed": "enforceReadonlyAndMonitor",
+    "logMappingDetails": true
+  }
 }
 EOF
+    set_perm "$MODPATH/config/global.json" 0 0 0644
+else
+    ui_print "- 保留现有全局配置"
 fi
 
-# 设置配置文件权限
-set_perm "$MODPATH/config/config.json" 0 0 0644
+# 创建默认监控路径配置（仅在不存在时创建）
+if [ ! -f "$MODPATH/config/monitor_paths.json" ]; then
+    ui_print "- 创建默认监控路径配置..."
+    cat > "$MODPATH/config/monitor_paths.json" << 'EOF'
+{
+  "paths": []
+}
+EOF
+    set_perm "$MODPATH/config/monitor_paths.json" 0 0 0644
+else
+    ui_print "- 保留现有监控路径配置"
+fi
+
+# 保留应用配置目录（不覆盖）
+if [ -d "$MODPATH/config/apps" ]; then
+    ui_print "- 保留现有应用配置"
+fi
 
 ui_print ""
 ui_print "- 安装完成！"

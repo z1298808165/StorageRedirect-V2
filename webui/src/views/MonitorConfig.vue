@@ -349,15 +349,33 @@ const saveConfig = async () => {
 const loadStats = async () => {
   try {
     const result = await appStore.callDaemon('log stats')
-    if (result) {
-      logStats.value = result
+    if (result && result.ok) {
+      logStats.value = {
+        totalSizeBytes: result.totalSizeBytes || 0,
+        maxSizeBytes: result.maxSizeBytes || 64 * 1024 * 1024,
+        appCount: result.appCount || 0
+      }
+    } else {
+      // 如果 daemon 不可用，设置默认值
+      logStats.value = {
+        totalSizeBytes: 0,
+        maxSizeBytes: 64 * 1024 * 1024,
+        appCount: 0
+      }
     }
   } catch (e) {
     console.error('Failed to load stats:', e)
+    // 出错时设置默认值
+    logStats.value = {
+      totalSizeBytes: 0,
+      maxSizeBytes: 64 * 1024 * 1024,
+      appCount: 0
+    }
   }
 }
 
 const formatBytes = (bytes) => {
+  if (bytes === undefined || bytes === null || isNaN(bytes)) return '0 B'
   if (bytes === 0) return '0 B'
   const k = 1024
   const sizes = ['B', 'KB', 'MB', 'GB']

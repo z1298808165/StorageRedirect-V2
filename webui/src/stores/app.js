@@ -254,6 +254,7 @@ export const useAppStore = defineStore('app', () => {
   const daemonStatus = ref({ online: false, version: '' })
   const isDemoMode = ref(false)
   const loadError = ref(null)
+  const runningApps = ref(new Set())
   
   // 保存队列，防止并发保存导致数据丢失
   const saveQueue = ref([])
@@ -1292,6 +1293,48 @@ export const useAppStore = defineStore('app', () => {
     return ksuApi.exec(command, options)
   }
 
+  // 获取运行中的应用列表
+  const getRunningApps = async () => {
+    if (isDemoMode.value) {
+      runningApps.value = new Set(['com.example.demo', 'com.tencent.mm'])
+      return runningApps.value
+    }
+
+    try {
+      const result = await ksuApi.exec('pm list packages -3 2>/dev/null')
+      if (result && result.errno === 0 && result.stdout) {
+        const allPackages = result.stdout
+          .split('\n')
+          .map(line => line.trim())
+          .filter(line => line.startsWith('package:'))
+          .map(line => line.replace('package:', ''))
+
+        const running = new Set()
+        for (const pkg of allPackages) {
+          try {
+            const pidResult = await ksuApi.exec(`pidof ${pkg} 2>/dev/null`)
+            if (pidResult && pidResult.stdout && pidResult.stdout.trim() !== '') {
+              running.add(pkg)
+            }
+          } catch (e) {
+            // 忽略错误
+          }
+        }
+        runningApps.value = running
+        return running
+      }
+    } catch (e) {
+      console.error('Failed to get running apps:', e)
+    }
+    runningApps.value = new Set()
+    return runningApps.value
+  }
+
+  // 检查单个应用是否在运行
+  const isAppRunning = (pkg) => {
+    return runningApps.value.has(pkg)
+  }
+
   return {
     apps,
     appConfigs,
@@ -1300,6 +1343,7 @@ export const useAppStore = defineStore('app', () => {
     daemonStatus,
     isDemoMode,
     loadError,
+    runningApps,
     appsWithRules,
     appsWithoutRules,
     ksuApi,
@@ -1317,6 +1361,8 @@ export const useAppStore = defineStore('app', () => {
     getAppIconUrl,
     exec,
     readConfigFile,
-    writeConfigFile
+    writeConfigFile,
+    getRunningApps,
+    isAppRunning
   }
 })
